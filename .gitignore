@@ -53,3 +53,8 @@ lib/core/constants/api_keys.dart
 lib/core/constants/api_keys.dart
 .env
 
+
+# API Keys (add this manually)
+lib/core/constants/api_keys.dart
+.env
+
