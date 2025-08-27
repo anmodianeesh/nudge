@@ -10,7 +10,6 @@ class CustomButton extends StatelessWidget {
   final Color? borderColor;
   final IconData? prefixIcon;
   final double? width;
-  final double height;
 
   const CustomButton({
     super.key,
@@ -22,23 +21,19 @@ class CustomButton extends StatelessWidget {
     this.borderColor,
     this.prefixIcon,
     this.width,
-    this.height = 56,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width ?? double.infinity,
-      height: height,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor ?? AppTheme.primaryPurple,
           foregroundColor: textColor ?? AppTheme.cardWhite,
-          elevation: 0,
-          side: borderColor != null
-              ? BorderSide(color: borderColor!, width: 1)
-              : null,
+          side: borderColor != null ? BorderSide(color: borderColor!) : null,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -49,22 +44,21 @@ class CustomButton extends StatelessWidget {
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.cardWhite),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               )
             : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   if (prefixIcon != null) ...[
-                    Icon(prefixIcon, size: 20),
+                    Icon(prefixIcon),
                     const SizedBox(width: 8),
                   ],
                   Text(
                     text,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: textColor ?? AppTheme.cardWhite,
                     ),
                   ),
                 ],

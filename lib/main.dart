@@ -1,21 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nudge/presentation/screens/splash/splash_screen.dart';
+import 'business_logic/cubits/nudges_cubit.dart';
 import 'core/theme/app_theme.dart';
-import 'presentation/screens/splash/splash_screen.dart';
+import 'presentation/screens/home/home_screen.dart';
 
 void main() {
-  runApp(const NudgeApp());
+  runApp(const MyApp());
 }
 
-class NudgeApp extends StatelessWidget {
-  const NudgeApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Nudge',
-      theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
-      debugShowCheckedModeBanner: false,
+    return BlocProvider(
+      create: (context) => NudgesCubit()..loadNudges(),
+      child: MaterialApp(
+        title: 'Nudge App',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          primarySwatch: Colors.purple,
+          scaffoldBackgroundColor: AppTheme.backgroundGray,
+          fontFamily: 'SF Pro Display', // or your preferred font
+        ),
+        home: const SplashScreen(),
+      ),
     );
   }
 }

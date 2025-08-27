@@ -3,7 +3,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../home/home_screen.dart';
+import '../home/home_screen.dart';  // Fixed path
 
 class UserInfoScreen extends StatefulWidget {
   final String userName;
@@ -26,7 +26,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   DateTime? _selectedDate;
   String? _selectedGender;
   String? _primaryGoal;
-  final List<String> _selectedChallenges = [];
+  List<String> _selectedChallenges = [];
   
   final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
   final List<String> _goalOptions = [

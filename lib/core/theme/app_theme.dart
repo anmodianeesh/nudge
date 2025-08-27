@@ -11,21 +11,20 @@ class AppTheme {
   static const Color textGray = Color(0xFF6B7280);
   static const Color textLight = Color(0xFF9CA3AF);
   static const Color borderGray = Color(0xFFE5E7EB);
-  
+
   // Gradients
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primaryPurple, primaryBlue],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
-  
+
   static const LinearGradient backgroundGradient = LinearGradient(
     colors: [Color(0xFFF8FAFF), Color(0xFFF0F4FF)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
-  // Theme Data
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -50,23 +49,6 @@ class AppTheme {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: cardWhite,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: borderGray),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: borderGray),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: primaryPurple, width: 2),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
     );
   }
