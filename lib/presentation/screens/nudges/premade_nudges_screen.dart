@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/nudge_model.dart';
-import 'package:nudge/data/premade_nudges_data.dart';
+import '../../../data/premade_nudges_data.dart';
+import '../../../business_logic/cubits/nudges_cubit.dart';
 
 class PremadeNudgesScreen extends StatefulWidget {
   const PremadeNudgesScreen({super.key});
@@ -12,7 +15,7 @@ class PremadeNudgesScreen extends StatefulWidget {
 
 class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
   late final List<Nudge> _allNudges;
-  late final List<String> _categories; // ["All", ...unique categories]
+  late final List<String> _categories; // ['All', ...unique]
 
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
@@ -23,7 +26,7 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
   void initState() {
     super.initState();
     _allNudges = List<Nudge>.from(PremadeNudgesData.allNudges);
-    // Build category list from data
+
     final unique = _allNudges.map((e) => e.category).toSet().toList()..sort();
     _categories = ['All', ...unique];
 
@@ -64,91 +67,36 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
     return Scaffold(
       backgroundColor: AppTheme.backgroundGray,
       appBar: AppBar(
+        title: const Text('Browse Habits'),
         backgroundColor: AppTheme.cardWhite,
         elevation: 0,
-        title: const Text('Browse Nudges'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: _SearchField(
               controller: _searchCtrl,
-              hintText: 'Search nudges…',
+              hintText: 'Search habits…',
             ),
           ),
         ),
       ),
-
       body: Column(
         children: [
-          // Filters Row
-          Container(
-            width: double.infinity,
-            color: AppTheme.cardWhite,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Categories as chips
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _categories.map((cat) {
-                      final selected = _selectedCategory == cat;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
-                        child: ChoiceChip(
-                          label: Text(
-                            cat,
-                            style: TextStyle(
-                              color: selected
-                                  ? Colors.white
-                                  : AppTheme.textDark,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          selected: selected,
-                          selectedColor: AppTheme.primaryPurple,
-                          backgroundColor: AppTheme.backgroundGray,
-                          onSelected: (_) {
-                            setState(() => _selectedCategory = cat);
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Active only toggle
-                Row(
-                  children: [
-                    Switch(
-                      value: _activeOnly,
-                      activeColor: AppTheme.primaryPurple,
-                      onChanged: (v) => setState(() => _activeOnly = v),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Active only',
-                      style: TextStyle(
-                        color: AppTheme.textDark,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          _FiltersBar(
+            categories: _categories,
+            selectedCategory: _selectedCategory,
+            activeOnly: _activeOnly,
+            onCategorySelected: (cat) => setState(() => _selectedCategory = cat),
+            onActiveOnlyChanged: (v) => setState(() => _activeOnly = v),
           ),
-
-          // Results
           Expanded(
             child: nudges.isEmpty
                 ? _EmptyState(
                     query: _query,
                     selectedCategory: _selectedCategory,
                     activeOnly: _activeOnly,
-                    onClearSearch: () {
+                    onClearFilters: () {
                       _searchCtrl.clear();
                       setState(() {
                         _selectedCategory = 'All';
@@ -176,8 +124,7 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: AppTheme.primaryPurple
-                                          .withOpacity(0.1),
+                                      color: AppTheme.primaryPurple.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: const Icon(
@@ -189,8 +136,7 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           nudge.title,
@@ -212,13 +158,13 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                     ),
                                   ),
                                   IconButton(
+                                    tooltip: 'Add to My Nudges',
                                     onPressed: () {
+                                      context.read<NudgesCubit>().addToMyNudges(nudge.id);
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
-                                          content: Text(
-                                              '${nudge.title} added to My Nudges'),
-                                          backgroundColor:
-                                              AppTheme.primaryPurple,
+                                          content: Text('"${nudge.title}" added to My Nudges'),
+                                          backgroundColor: AppTheme.primaryPurple,
                                         ),
                                       );
                                     },
@@ -238,6 +184,7 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                   height: 1.4,
                                 ),
                               ),
+                              // NOTE: Removed the "paused by default" message completely
                             ],
                           ),
                         ),
@@ -251,10 +198,86 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
   }
 }
 
+class _FiltersBar extends StatelessWidget {
+  final List<String> categories;
+  final String selectedCategory;
+  final bool activeOnly;
+  final ValueChanged<String> onCategorySelected;
+  final ValueChanged<bool> onActiveOnlyChanged;
+
+  const _FiltersBar({
+    required this.categories,
+    required this.selectedCategory,
+    required this.activeOnly,
+    required this.onCategorySelected,
+    required this.onActiveOnlyChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppTheme.cardWhite,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Category chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: categories.map((cat) {
+                final selected = selectedCategory == cat;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ChoiceChip(
+                    label: Text(
+                      cat,
+                      style: TextStyle(
+                        color: selected ? Colors.white : AppTheme.textDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    selected: selected,
+                    selectedColor: AppTheme.primaryPurple,
+                    backgroundColor: AppTheme.backgroundGray,
+                    onSelected: (_) => onCategorySelected(cat),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Active only
+          Row(
+            children: [
+              Switch(
+                value: activeOnly,
+                activeColor: AppTheme.primaryPurple,
+                onChanged: onActiveOnlyChanged,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Active only',
+                style: TextStyle(
+                  color: AppTheme.textDark,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
-  const _SearchField({required this.controller, required this.hintText});
+  const _SearchField({
+    required this.controller,
+    required this.hintText,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -292,18 +315,17 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-
 class _EmptyState extends StatelessWidget {
   final String query;
   final String selectedCategory;
   final bool activeOnly;
-  final VoidCallback onClearSearch;
+  final VoidCallback onClearFilters;
 
   const _EmptyState({
     required this.query,
     required this.selectedCategory,
     required this.activeOnly,
-    required this.onClearSearch,
+    required this.onClearFilters,
   });
 
   @override
@@ -332,7 +354,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: onClearSearch,
+              onPressed: onClearFilters,
               child: const Text('Clear filters'),
             ),
           ],

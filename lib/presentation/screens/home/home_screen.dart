@@ -89,7 +89,7 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: isGolden 
+            color: isGolden
                 ? Colors.amber.withOpacity(0.3)
                 : AppTheme.primaryPurple.withOpacity(0.2),
             blurRadius: 15,
@@ -135,11 +135,7 @@ class HomeScreen extends StatelessWidget {
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Icon(
-                    icon,
-                    size: 32,
-                    color: Colors.white,
-                  ),
+                  child: Icon(icon, size: 32, color: Colors.white),
                 ),
                 const SizedBox(width: 20),
                 Expanded(
@@ -165,11 +161,8 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color: Colors.white.withOpacity(0.8),
-                  size: 20,
-                ),
+                Icon(Icons.arrow_forward_ios,
+                    color: Colors.white.withOpacity(0.8), size: 20),
               ],
             ),
           ),
@@ -178,15 +171,11 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressOverview(NudgesState state) {
-    int totalNudges = 0;
-    int completedToday = 0;
-    
-    if (state is NudgesLoaded) {
-      totalNudges = state.nudges.length;
-      // Mock completed count - replace with actual logic
-      completedToday = (totalNudges * 0.7).round();
-    }
+  Widget _buildProgressOverview({
+    required int totalNudges,
+    required int completedToday,
+  }) {
+    final pct = totalNudges > 0 ? (completedToday / totalNudges) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -205,7 +194,7 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Today\'s Progress',
+            "Today's Progress",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -229,10 +218,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const Text(
                       'Nudges completed',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.textGray,
-                      ),
+                      style: TextStyle(fontSize: 14, color: AppTheme.textGray),
                     ),
                   ],
                 ),
@@ -244,7 +230,7 @@ class HomeScreen extends StatelessWidget {
                     width: 60,
                     height: 60,
                     child: CircularProgressIndicator(
-                      value: totalNudges > 0 ? completedToday / totalNudges : 0,
+                      value: pct,
                       strokeWidth: 6,
                       backgroundColor: AppTheme.borderGray,
                       valueColor: const AlwaysStoppedAnimation<Color>(
@@ -253,7 +239,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '${totalNudges > 0 ? ((completedToday / totalNudges) * 100).round() : 0}%',
+                    '${(pct * 100).round()}%',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -269,7 +255,11 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActiveNudgeCard(Nudge nudge) {
+    Widget _buildActiveNudgeCard({
+    required BuildContext context,
+    required Nudge nudge,
+    required bool isCompleted,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -322,23 +312,36 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.green),
-            ),
-            child: const Icon(
-              Icons.check,
-              size: 16,
-              color: Colors.green,
+          GestureDetector(
+            onTap: () =>
+                context.read<NudgesCubit>().markDoneToday(nudge.id),
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: isCompleted
+                    ? Colors.green.withOpacity(0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isCompleted ? Colors.green : AppTheme.borderGray,
+                ),
+              ),
+              child: Icon(
+                Icons.check,
+                size: 16,
+                color: isCompleted ? Colors.green : AppTheme.textGray,
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  void _toggleDone(String id) {
+    // This gets the nearest context via BlocProvider.of in build()
+    // (We’ll call this from the onTap above using a closure.)
   }
 
   @override
@@ -368,15 +371,25 @@ class HomeScreen extends StatelessWidget {
       ),
       body: BlocBuilder<NudgesCubit, NudgesState>(
         builder: (context, state) {
+          // --- Derive data from the current NudgesState (no type checks needed) ---
+          final active = state.activeMyNudges; // from your current state
+          final completedTodayCount = active
+              .where((n) => state.isCompletedToday(n.id))
+              .length;
+          final total = active.length;
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppConstants.paddingLarge),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Progress Overview
-                _buildProgressOverview(state),
+                _buildProgressOverview(
+                  totalNudges: total,
+                  completedToday: completedTodayCount,
+                ),
                 const SizedBox(height: 24),
-                
+
                 // AI Assistant Button (Golden/Shiny)
                 _buildShinyButton(
                   context: context,
@@ -394,7 +407,7 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Premade Nudges Button
                 _buildShinyButton(
                   context: context,
@@ -411,7 +424,7 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Active Nudges Section
                 const Text(
                   'Active Nudges',
@@ -422,20 +435,21 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
-                if (state is NudgesLoading)
-                  const Center(
-                    child: CircularProgressIndicator(
-                      color: AppTheme.primaryPurple,
-                    ),
-                  )
-                else if (state is NudgesLoaded && state.nudges.isNotEmpty)
+
+                if (total > 0)
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: state.nudges.length,
+                    itemCount: active.length,
                     itemBuilder: (context, index) {
-                      return _buildActiveNudgeCard(state.nudges[index]);
+                      final n = active[index];
+                      final isCompleted = state.isCompletedToday(n.id);
+                      return _buildActiveNudgeCard(
+  context: context,
+  nudge: n,
+  isCompleted: isCompleted,
+);
+
                     },
                   )
                 else
@@ -448,7 +462,7 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         Icon(
-                          Icons.psychology_alt_outlined,  // This exists
+                          Icons.psychology_alt_outlined,
                           size: 48,
                           color: AppTheme.textGray.withOpacity(0.5),
                         ),
