@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../data/models/nudge.dart';
+import '../../../data/models/nudge_model.dart';
 
 class NudgeCard extends StatelessWidget {
   final Nudge nudge;

@@ -1,4 +1,4 @@
-import 'lib/../models/nudge.dart';
+import 'models/nudge_model.dart';
 
 class PremadeNudgesData {
   static final List<Nudge> _allNudges = [

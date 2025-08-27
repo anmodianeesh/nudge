@@ -4,7 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../business_logic/cubits/nudges_cubit.dart';
 import '../../../business_logic/states/nudges_state.dart';
-import '../../../data/models/nudge.dart';
+import '../../../data/models/nudge_model.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chat/chat_screen.dart';
 import '../nudges/premade_nudges_screen.dart';

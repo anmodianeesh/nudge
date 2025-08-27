@@ -1,6 +1,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../states/nudges_state.dart';
-import '../../data/models/nudge.dart';
+import '../../data/models/nudge_model.dart';
 
 class NudgesCubit extends Cubit<NudgesState> {
   NudgesCubit() : super(NudgesInitial());

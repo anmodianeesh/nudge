@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../data/models/nudge.dart';
+import '../../data/models/nudge_model.dart';
 
 abstract class NudgesState extends Equatable {
   const NudgesState();

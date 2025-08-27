@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../data/models/nudge.dart';
+import '../../../data/models/nudge_model.dart';
 import 'package:nudge/data/premade_nudges_data.dart';
 
 class PremadeNudgesScreen extends StatelessWidget {
