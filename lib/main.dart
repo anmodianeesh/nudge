@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
           scaffoldBackgroundColor: AppTheme.backgroundGray,
           fontFamily: 'SF Pro Display', // or your preferred font
         ),
-        home: const SplashScreen(),
+        home: const HomeScreen(), //changed temporarily to home for fast testing. default should be SplashScreen
       ),
     );
   }
