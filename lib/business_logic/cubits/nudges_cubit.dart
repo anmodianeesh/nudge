@@ -6,8 +6,8 @@ import 'package:nudge/data/premade_nudges_data.dart';
 class NudgesCubit extends Cubit<NudgesState> {
   NudgesCubit() : super(const NudgesState());
 
-  // Load premade nudges (can later be replaced by a repo/service call)
   void loadInitial() {
+    // Load premade nudges (extend later with custom nudges).
     final all = List<Nudge>.from(PremadeNudgesData.allNudges);
     emit(state.copyWith(allNudges: all, error: null));
   }
@@ -23,11 +23,21 @@ class NudgesCubit extends Cubit<NudgesState> {
     final updated = {...state.myNudgeIds}..remove(id);
     final paused = {...state.pausedIds}..remove(id);
     final completed = {...state.completedTodayIds}..remove(id);
+
+    // Also clean from history sets
+    final history = <String, Set<String>>{};
+    state.completionsByDate.forEach((k, v) {
+      final nv = {...v}..remove(id);
+      history[k] = nv;
+    });
+
     final snoozed = {...state.snoozedUntil}..remove(id);
+
     emit(state.copyWith(
       myNudgeIds: updated,
       pausedIds: paused,
       completedTodayIds: completed,
+      completionsByDate: history,
       snoozedUntil: snoozed,
     ));
   }
@@ -43,15 +53,29 @@ class NudgesCubit extends Cubit<NudgesState> {
     emit(state.copyWith(pausedIds: paused));
   }
 
+  /// Toggle "done today" and log in history.
   void markDoneToday(String id) {
     if (!state.myNudgeIds.contains(id)) return;
-    final set = {...state.completedTodayIds};
-    if (set.contains(id)) {
-      set.remove(id);
+
+    final todayKey = dateKey(DateTime.now());
+    final setToday = {...(state.completionsByDate[todayKey] ?? <String>{})};
+
+    final completed = {...state.completedTodayIds};
+    if (completed.contains(id)) {
+      // Undo
+      completed.remove(id);
+      setToday.remove(id);
     } else {
-      set.add(id);
+      completed.add(id);
+      setToday.add(id);
     }
-    emit(state.copyWith(completedTodayIds: set));
+
+    final history = {...state.completionsByDate}..[todayKey] = setToday;
+
+    emit(state.copyWith(
+      completedTodayIds: completed,
+      completionsByDate: history,
+    ));
   }
 
   void snoozeForMinutes(String id, {int minutes = 30}) {

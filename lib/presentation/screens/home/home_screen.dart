@@ -8,6 +8,7 @@ import '../../../data/models/nudge_model.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chat/chat_screen.dart';
 import '../nudges/premade_nudges_screen.dart';
+// import '../nudges/my_nudges_screen.dart'; // if you have this screen
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -190,158 +191,115 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          const Text(
-            "Today's Progress",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textDark,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
+          // Ring
+          Stack(
+            alignment: Alignment.center,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$completedToday/$totalNudges',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryPurple,
-                      ),
-                    ),
-                    const Text(
-                      'Nudges completed',
-                      style: TextStyle(fontSize: 14, color: AppTheme.textGray),
-                    ),
-                  ],
+              SizedBox(
+                width: 64,
+                height: 64,
+                child: CircularProgressIndicator(
+                  value: pct,
+                  strokeWidth: 6,
+                  backgroundColor: AppTheme.borderGray,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppTheme.primaryPurple,
+                  ),
                 ),
               ),
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 60,
-                    height: 60,
-                    child: CircularProgressIndicator(
-                      value: pct,
-                      strokeWidth: 6,
-                      backgroundColor: AppTheme.borderGray,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppTheme.primaryPurple,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${(pct * 100).round()}%',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                ],
+              Text(
+                '${(pct * 100).round()}%',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textDark,
+                ),
               ),
             ],
           ),
+          const SizedBox(width: 16),
+          // Counts + chips
+          Expanded(
+            child: Builder(builder: (context) {
+              final state = context.watch<NudgesCubit>().state;
+              final total = totalNudges;
+              final completed = completedToday;
+              final dueNow = 0; // placeholder until schedules
+              final dueLater = (total - completed - dueNow).clamp(0, 999);
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$completed of $total done',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _StatChip(label: 'Due now', value: '$dueNow'),
+                      _StatChip(label: 'Due later', value: '$dueLater'),
+                      _StatChip(label: 'Streak', value: '0'),
+                    ],
+                  ),
+                ],
+              );
+            }),
+          ),
         ],
       ),
     );
   }
 
-    Widget _buildActiveNudgeCard({
-    required BuildContext context,
-    required Nudge nudge,
-    required bool isCompleted,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _getCategoryColor(nudge.category).withOpacity(0.2),
+  Widget _nextUpCard(BuildContext context, NudgesState state) {
+    final active = state.activeMyNudges;
+    if (active.isEmpty) return const SizedBox.shrink();
+
+    // Simple heuristic: first incomplete as "Next up".
+    final next = active.firstWhere(
+      (n) => !state.isCompletedToday(n.id),
+      orElse: () => active.first,
+    );
+    final isDone = state.isCompletedToday(next.id);
+
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Icon(Icons.bolt, color: AppTheme.primaryPurple),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Next up', style: TextStyle(color: AppTheme.textGray)),
+                  const SizedBox(height: 4),
+                  Text(
+                    next.title,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  Text(next.category, style: const TextStyle(color: AppTheme.textGray)),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => context.read<NudgesCubit>().markDoneToday(next.id),
+              child: Text(isDone ? 'Undo' : 'Done'),
+            ),
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: _getCategoryColor(nudge.category).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              _getIconForName(nudge.icon),
-              color: _getCategoryColor(nudge.category),
-              size: 24,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  nudge.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  nudge.description,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.textGray,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () =>
-                context.read<NudgesCubit>().markDoneToday(nudge.id),
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: isCompleted
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isCompleted ? Colors.green : AppTheme.borderGray,
-                ),
-              ),
-              child: Icon(
-                Icons.check,
-                size: 16,
-                color: isCompleted ? Colors.green : AppTheme.textGray,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
-  }
-
-  void _toggleDone(String id) {
-    // This gets the nearest context via BlocProvider.of in build()
-    // (We’ll call this from the onTap above using a closure.)
   }
 
   @override
@@ -350,7 +308,7 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: AppTheme.backgroundGray,
       appBar: AppBar(
         title: const Text(
-          'My Habits',
+          'Home',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -360,37 +318,40 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: AppTheme.cardWhite,
         elevation: 0,
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: AppTheme.textDark),
-            onPressed: () {
-              // TODO: Navigate to profile
-            },
-          ),
-        ],
+          
       ),
       body: BlocBuilder<NudgesCubit, NudgesState>(
         builder: (context, state) {
-          // --- Derive data from the current NudgesState (no type checks needed) ---
-          final active = state.activeMyNudges; // from your current state
-          final completedTodayCount = active
-              .where((n) => state.isCompletedToday(n.id))
-              .length;
+          final active = state.activeMyNudges;
+          final completedTodayCount =
+              active.where((n) => state.isCompletedToday(n.id)).length;
           final total = active.length;
+
+          final weeklyRates = state.weeklyCompletionRates(days: 7);
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppConstants.paddingLarge),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Progress Overview
+                // Progress Overview (summary ring + chips)
                 _buildProgressOverview(
                   totalNudges: total,
                   completedToday: completedTodayCount,
                 ),
+                const SizedBox(height: 16),
+
+                // Next Up (single actionable nudge)
+                _nextUpCard(context, state),
+                const SizedBox(height: 16),
+
+                // Mini 7-day completion graph
+                
+                const SizedBox(height: 8),
+                _WeeklyMiniChart(rates: weeklyRates),
                 const SizedBox(height: 24),
 
-                // AI Assistant Button (Golden/Shiny)
+                // Golden AI button
                 _buildShinyButton(
                   context: context,
                   title: 'Ask Nudge',
@@ -400,15 +361,13 @@ class HomeScreen extends StatelessWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const ChatScreen(),
-                      ),
+                      MaterialPageRoute(builder: (context) => const ChatScreen()),
                     );
                   },
                 ),
                 const SizedBox(height: 16),
 
-                // Premade Nudges Button
+                // Premade nudges button
                 _buildShinyButton(
                   context: context,
                   title: 'Browse Nudges',
@@ -417,80 +376,168 @@ class HomeScreen extends StatelessWidget {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => const PremadeNudgesScreen(),
-                      ),
+                      MaterialPageRoute(builder: (context) => const PremadeNudgesScreen()),
                     );
                   },
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // Active Nudges Section
-                const Text(
-                  'Active Nudges',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                if (total > 0)
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: active.length,
-                    itemBuilder: (context, index) {
-                      final n = active[index];
-                      final isCompleted = state.isCompletedToday(n.id);
-                      return _buildActiveNudgeCard(
-  context: context,
-  nudge: n,
-  isCompleted: isCompleted,
-);
-
-                    },
-                  )
-                else
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardWhite,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.psychology_alt_outlined,
-                          size: 48,
-                          color: AppTheme.textGray.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'No active nudges yet',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textGray,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Start by asking Nudge for personalized recommendations or browse our curated habits.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppTheme.textGray,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+                // Optional: a "View My Nudges" management CTA
+                // SizedBox(
+                //   height: 44,
+                //   child: OutlinedButton.icon(
+                //     icon: const Icon(Icons.list),
+                //     onPressed: () {
+                //       Navigator.of(context).push(
+                //         MaterialPageRoute(builder: (_) => const MyNudgesScreen()),
+                //       );
+                //     },
+                //     label: const Text('View My Nudges'),
+                //   ),
+                // ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppTheme.backgroundGray,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppTheme.borderGray),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: const TextStyle(color: AppTheme.textGray)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lightweight, no-deps mini bar chart for 7 days.
+/// [rates] must be 7 values between 0..1 (oldest→newest).
+class _WeeklyMiniChart extends StatelessWidget {
+  final List<double> rates; // 0..1, oldest → newest
+  const _WeeklyMiniChart({required this.rates});
+
+  // Tune these to taste — the overall card height will be consistent
+  static const double _valueLabelHeight = 14.0;
+  static const double _dayLabelHeight = 12.0;
+  static const double _graphHeight = 80.0; // bars grow within this
+  static const double _barMinHeight = 2.0; // tiny stub for 0%
+
+  @override
+  Widget build(BuildContext context) {
+    final bars = rates.length >= 7 ? rates.take(7).toList() : List<double>.filled(7, 0.0);
+    final now = DateTime.now();
+    final weekdayLabels = List<String>.generate(7, (i) {
+      final day = now.subtract(Duration(days: 6 - i));
+      return ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][day.weekday - 1];
+    });
+
+    return Card(
+      color: AppTheme.cardWhite,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This week',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textDark,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Fixed-height chart block – the bars only grow inside this space
+            SizedBox(
+              // Total fixed height = value label + gaps + graphHeight + gaps + day label
+              height: _valueLabelHeight + 6 + _graphHeight + 6 + _dayLabelHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(7, (i) {
+                  final v = bars[i].clamp(0.0, 1.0);
+                  final barHeight = v == 0 ? _barMinHeight : v * _graphHeight;
+
+                  return Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Fixed-height value label
+                        SizedBox(
+                          height: _valueLabelHeight,
+                          child: Center(
+                            child: Text(
+                              '${(v * 100).round()}%',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.textGray,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Fixed-height graph area: bar aligns to bottom
+                        SizedBox(
+                          height: _graphHeight,
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              height: barHeight,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryPurple,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Fixed-height day label
+                        SizedBox(
+                          height: _dayLabelHeight,
+                          child: Center(
+                            child: Text(
+                              weekdayLabels[i],
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: AppTheme.textGray,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

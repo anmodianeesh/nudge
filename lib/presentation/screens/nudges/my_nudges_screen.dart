@@ -14,7 +14,12 @@ class MyNudgesScreen extends StatelessWidget {
       length: 1, // Only Active for now (Paused tab removed)
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('My Nudges'),
+          title: const Text('My Nudges', style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textDark,
+          ),),
+      
           backgroundColor: AppTheme.cardWhite,
           elevation: 0,
           bottom: const TabBar(

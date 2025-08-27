@@ -1,12 +1,35 @@
 import 'package:collection/collection.dart';
 import 'package:nudge/data/models/nudge_model.dart';
 
+/// Helper: yyyy-mm-dd key (local time).
+String dateKey(DateTime dt) {
+  final local = dt.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
 class NudgesState {
+  /// All available nudges (premade/custom merged later if needed).
   final List<Nudge> allNudges;
-  final Set<String> myNudgeIds;           // user’s selected nudges
-  final Set<String> pausedIds;            // subset of myNudgeIds
-  final Set<String> completedTodayIds;    // ephemeral “done today”
-  final Map<String, DateTime> snoozedUntil; // id -> wake time
+
+  /// User-selected nudges (their "My Nudges").
+  final Set<String> myNudgeIds;
+
+  /// Paused (not used on UI right now, but kept for future).
+  final Set<String> pausedIds;
+
+  /// Quick toggle cache for "completed today" (derived from [completionsByDate]).
+  final Set<String> completedTodayIds;
+
+  /// Snoozed-until map.
+  final Map<String, DateTime> snoozedUntil;
+
+  /// History log: dateKey -> set of nudgeIds completed on that date.
+  /// Example: { '2025-08-28': {'n1','n2'} }
+  final Map<String, Set<String>> completionsByDate;
+
   final String? error;
 
   const NudgesState({
@@ -15,10 +38,11 @@ class NudgesState {
     this.pausedIds = const {},
     this.completedTodayIds = const {},
     this.snoozedUntil = const {},
+    this.completionsByDate = const {},
     this.error,
   });
 
-  // --- Derived ---
+  // ---------- Derived ----------
   List<Nudge> get myNudges =>
       allNudges.where((n) => myNudgeIds.contains(n.id)).toList();
 
@@ -42,12 +66,39 @@ class NudgesState {
     return until != null && DateTime.now().isBefore(until);
   }
 
+  /// Count how many of the user's active nudges were completed on the given date.
+  int completedCountOn(DateTime day) {
+    final key = dateKey(day);
+    final set = completionsByDate[key];
+    if (set == null) return 0;
+    // Only count nudges that are (or were) part of myNudgeIds; we keep it simple for now
+    return set.length;
+  }
+
+  /// Returns a list of doubles (0..1) for the last [days] days, oldest→newest.
+  /// Denominator = current activeMyNudges length (simple & stable for now).
+  List<double> weeklyCompletionRates({int days = 7}) {
+    final total = activeMyNudges.length;
+    if (total == 0) {
+      return List<double>.filled(days, 0.0);
+    }
+    final today = DateTime.now();
+    final List<double> rates = [];
+    for (int i = days - 1; i >= 0; i--) {
+      final day = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
+      final c = completedCountOn(day);
+      rates.add((c / total).clamp(0.0, 1.0));
+    }
+    return rates;
+  }
+
   NudgesState copyWith({
     List<Nudge>? allNudges,
     Set<String>? myNudgeIds,
     Set<String>? pausedIds,
     Set<String>? completedTodayIds,
     Map<String, DateTime>? snoozedUntil,
+    Map<String, Set<String>>? completionsByDate,
     String? error,
   }) {
     return NudgesState(
@@ -56,6 +107,7 @@ class NudgesState {
       pausedIds: pausedIds ?? this.pausedIds,
       completedTodayIds: completedTodayIds ?? this.completedTodayIds,
       snoozedUntil: snoozedUntil ?? this.snoozedUntil,
+      completionsByDate: completionsByDate ?? this.completionsByDate,
       error: error,
     );
   }
