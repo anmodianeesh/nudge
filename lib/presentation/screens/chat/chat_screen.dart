@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../data/repos/ai_repo.dart';
+import '../../../data/repos/nudges_repo.dart';
+import '../../../data/network/api_client.dart';
+import '../../../data/models/nudge_spec.dart';
+import '../../widgets/confirm_nudge_sheet.dart';
 import 'chat_history_screen.dart';
+//import '../../../data/storage/nudges_storage.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -14,6 +20,20 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
+
+  // API clients
+  late final ApiClient _apiClient;
+  late final AiRepo _aiRepo;
+  late final NudgesRepo _nudgesRepo;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize API clients - using mock for now
+    _apiClient = ApiClient(baseUrl: 'http://localhost:3000');
+    _aiRepo = MockAiRepo(); // Mock for testing
+    _nudgesRepo = MockNudgesRepo(); // Mock for testing
+  }
 
   @override
   void dispose() {
@@ -31,20 +51,100 @@ class _ChatScreenState extends State<ChatScreen> {
       _controller.clear();
     });
 
-    // Switch to chat view immediately, then simulate reply (replace with real API)
     setState(() => _isTyping = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-    setState(() {
-      _messages.add(ChatMessage(
-        role: MessageRole.assistant,
-        text: _fakeCoachReply(trimmed),
-        time: DateTime.now(),
-      ));
-      _isTyping = false;
-    });
 
-    ChatArchive.autosaveFromMessages(_messages);
-    _scrollToBottom();
+    try {
+      // Check if user wants to create a nudge
+      if (_shouldCreateNudge(trimmed)) {
+        await _handleNudgeCreation(trimmed);
+      } else {
+        // Regular chat response
+        await Future.delayed(const Duration(milliseconds: 600));
+        setState(() {
+          _messages.add(ChatMessage(
+            role: MessageRole.assistant,
+            text: _fakeCoachReply(trimmed),
+            time: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _messages.add(ChatMessage(
+          role: MessageRole.assistant,
+          text: "Sorry, I had trouble processing that. Please try again.",
+          time: DateTime.now(),
+        ));
+      });
+    } finally {
+      setState(() => _isTyping = false);
+      ChatArchive.autosaveFromMessages(_messages);
+      _scrollToBottom();
+    }
+  }
+
+  bool _shouldCreateNudge(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('remind me') || 
+           lower.contains('create nudge') ||
+           lower.contains('help me') ||
+           lower.contains('habit') ||
+           lower.contains('routine') ||
+           lower.contains('water') ||
+           lower.contains('sleep') ||
+           lower.contains('exercise');
+  }
+
+  Future<void> _handleNudgeCreation(String userText) async {
+    try {
+      // Add AI response suggesting the nudge
+      setState(() {
+        _messages.add(ChatMessage(
+          role: MessageRole.assistant,
+          text: "I can help you with that! Let me create a nudge for you.",
+          time: DateTime.now(),
+        ));
+      });
+
+      // Call AI to generate nudge spec
+      final spec = await _aiRepo.suggestFromChat(userText, 'Europe/Madrid');
+      
+      if (!mounted) return;
+
+      // Show confirmation sheet
+      final confirmed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => ConfirmNudgeSheet(
+          spec: spec,
+          onConfirm: _createNudge,
+        ),
+      );
+
+      if (confirmed == true && mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            role: MessageRole.assistant,
+            text: "Perfect! Your nudge has been created and scheduled. I'll remind you at the right time.",
+            time: DateTime.now(),
+          ));
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add(ChatMessage(
+            role: MessageRole.assistant,
+            text: "I had trouble creating that nudge. Could you try describing it differently?",
+            time: DateTime.now(),
+          ));
+        });
+      }
+    }
+  }
+
+  Future<void> _createNudge(NudgeSpec spec) async {
+    await _nudgesRepo.createFromSpec(spec);
   }
 
   void _scrollToBottom() {
@@ -67,9 +167,9 @@ class _ChatScreenState extends State<ChatScreen> {
       return "Try a 10-minute wind-down at 21:30. I can nudge you.";
     }
     if (userText.toLowerCase().contains('study')) {
-      return "2-minute focus sprint: open the doc, add one bullet. I’ll check back.";
+      return "2-minute focus sprint: open the doc, add one bullet. I'll check back.";
     }
-    return "Got it. Let’s turn this into a tiny step you can do today.";
+    return "Got it. Let's turn this into a tiny step you can do today.";
   }
 
   Future<void> _openHistory() async {
@@ -197,7 +297,7 @@ class _WelcomePane extends StatelessWidget {
                             textInputAction: TextInputAction.send,
                             onSubmitted: onSend,
                             decoration: const InputDecoration(
-                              hintText: 'Describe your perfect routine',
+                              hintText: 'Chat with Nudge...',
                               border: InputBorder.none,
                             ),
                           ),
@@ -308,13 +408,17 @@ class _Composer extends StatelessWidget {
               controller: controller,
               enabled: enabled,
               minLines: 1, maxLines: 5,
-              textInputAction: TextInputAction.newline,
+              textInputAction: TextInputAction.send,
               decoration: const InputDecoration(
                 hintText: 'Message Nudge…',
                 border: InputBorder.none,
                 isDense: true,
               ),
-              onSubmitted: (v) { if (v.trim().isNotEmpty) onSend(v); },
+              onSubmitted: (text) {
+                if (text.trim().isNotEmpty) {
+                  onSend(text);
+                }
+              },
             ),
           ),
           IconButton(
@@ -432,6 +536,72 @@ class _Dot extends StatelessWidget {
       width: 6, height: 6,
       child: DecoratedBox(decoration: BoxDecoration(color: AppTheme.textGray, shape: BoxShape.circle)),
     );
+  }
+}
+
+/* -------------------- Mock Classes for Testing -------------------- */
+
+class MockAiRepo implements AiRepo {
+  @override
+  Future<NudgeSpec> suggestFromChat(String userInput, String tz) async {
+    await Future.delayed(const Duration(milliseconds: 1200)); // Simulate network delay
+    
+    // Generate different nudges based on input
+    if (userInput.toLowerCase().contains('water')) {
+      return NudgeSpec(
+        title: "Drink more water",
+        microStep: "Fill and finish one glass",
+        tone: "friendly",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=11;BYMINUTE=0",
+        reminderCopy: "Hydration time! 💧",
+      );
+    } else if (userInput.toLowerCase().contains('sleep')) {
+      return NudgeSpec(
+        title: "Better sleep routine",
+        microStep: "Put phone on charger in hallway",
+        tone: "gentle",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=21;BYMINUTE=30",
+        reminderCopy: "Wind-down time 🌙",
+      );
+    } else if (userInput.toLowerCase().contains('exercise')) {
+      return NudgeSpec(
+        title: "Daily movement",
+        microStep: "Do 10 jumping jacks",
+        tone: "motivational",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=8;BYMINUTE=0",
+        reminderCopy: "Let's get moving! 💪",
+      );
+    } else {
+      return NudgeSpec(
+        title: "Daily habit",
+        microStep: "Take one small action",
+        tone: "friendly",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=12;BYMINUTE=0",
+        reminderCopy: "Time for your daily habit! ✨",
+      );
+    }
+  }
+}
+
+class MockNudgesRepo implements NudgesRepo {
+  @override
+  Future<void> createFromSpec(NudgeSpec spec) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Import the storage class at the top of the file
+    // For now, we'll simulate saving
+    print('Mock: Created nudge - ${spec.title}');
+    
+    // TODO: Uncomment this when NudgesStorage is available
+    // await NudgesStorage.addNudge(spec);
   }
 }
 
