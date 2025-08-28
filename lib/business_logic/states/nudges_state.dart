@@ -1,6 +1,17 @@
 import 'package:collection/collection.dart';
 import 'package:nudge/data/models/nudge_model.dart';
 
+
+
+enum ScheduleKind { hourly, timesPerDay, specificTimes, continuous }
+
+class NudgeScheduleSimple {
+  final ScheduleKind kind;
+  final int dailyTarget; // e.g., 8 glasses of water; for hourly use awake-hours
+  const NudgeScheduleSimple({required this.kind, required this.dailyTarget});
+}
+
+
 /// Helper: yyyy-mm-dd key (local time).
 String dateKey(DateTime dt) {
   final local = dt.toLocal();
@@ -11,6 +22,12 @@ String dateKey(DateTime dt) {
 }
 
 class NudgesState {
+
+  final Map<String, NudgeScheduleSimple> schedules; // nudgeId -> schedule
+  final Map<String, Map<String, int>> dailyLogs;    // dateKey -> {nudgeId -> count}
+
+
+
   /// All available nudges (premade/custom merged later if needed).
   final List<Nudge> allNudges;
 
@@ -33,14 +50,52 @@ class NudgesState {
   final String? error;
 
   const NudgesState({
-    this.allNudges = const [],
-    this.myNudgeIds = const {},
-    this.pausedIds = const {},
-    this.completedTodayIds = const {},
-    this.snoozedUntil = const {},
-    this.completionsByDate = const {},
-    this.error,
-  });
+  this.allNudges = const [],
+  this.myNudgeIds = const {},
+  this.pausedIds = const {},
+  this.completedTodayIds = const {},
+  this.snoozedUntil = const {},
+  this.completionsByDate = const {},
+  this.schedules = const {},
+  this.dailyLogs = const {},
+  this.error,
+});
+
+
+/// yyyy-mm-dd key in local time
+static String dateKey(DateTime dt) {
+  final local = dt.toLocal();
+  final y = local.year.toString().padLeft(4, '0');
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
+int dailyCountFor(String nudgeId, DateTime day) {
+  final key = dateKey(day);
+  final m = dailyLogs[key];
+  if (m == null) return 0;
+  return m[nudgeId] ?? 0;
+}
+
+bool isActionable(String nudgeId) {
+  final s = schedules[nudgeId];
+  if (s == null) return false;
+  return s.kind != ScheduleKind.continuous;
+}
+
+/// Actionable nudges only (hourly / timesPerDay / specificTimes), excluding paused/snoozed
+List<Nudge> get actionableNudges {
+  final now = DateTime.now();
+  return activeMyNudges.where((n) {
+    if (!isActionable(n.id)) return false;
+    final until = snoozedUntil[n.id];
+    if (until != null && now.isBefore(until)) return false;
+    return true;
+  }).toList()
+    ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+}
+
 
   // ---------- Derived ----------
   List<Nudge> get myNudges =>
@@ -93,22 +148,26 @@ class NudgesState {
   }
 
   NudgesState copyWith({
-    List<Nudge>? allNudges,
-    Set<String>? myNudgeIds,
-    Set<String>? pausedIds,
-    Set<String>? completedTodayIds,
-    Map<String, DateTime>? snoozedUntil,
-    Map<String, Set<String>>? completionsByDate,
-    String? error,
-  }) {
-    return NudgesState(
-      allNudges: allNudges ?? this.allNudges,
-      myNudgeIds: myNudgeIds ?? this.myNudgeIds,
-      pausedIds: pausedIds ?? this.pausedIds,
-      completedTodayIds: completedTodayIds ?? this.completedTodayIds,
-      snoozedUntil: snoozedUntil ?? this.snoozedUntil,
-      completionsByDate: completionsByDate ?? this.completionsByDate,
-      error: error,
-    );
-  }
+  List<Nudge>? allNudges,
+  Set<String>? myNudgeIds,
+  Set<String>? pausedIds,
+  Set<String>? completedTodayIds,
+  Map<String, DateTime>? snoozedUntil,
+  Map<String, Set<String>>? completionsByDate,
+  Map<String, NudgeScheduleSimple>? schedules,
+  Map<String, Map<String, int>>? dailyLogs,
+  String? error,
+}) {
+  return NudgesState(
+    allNudges: allNudges ?? this.allNudges,
+    myNudgeIds: myNudgeIds ?? this.myNudgeIds,
+    pausedIds: pausedIds ?? this.pausedIds,
+    completedTodayIds: completedTodayIds ?? this.completedTodayIds,
+    snoozedUntil: snoozedUntil ?? this.snoozedUntil,
+    completionsByDate: completionsByDate ?? this.completionsByDate,
+    schedules: schedules ?? this.schedules,
+    dailyLogs: dailyLogs ?? this.dailyLogs,
+    error: error,
+  );
+}
 }

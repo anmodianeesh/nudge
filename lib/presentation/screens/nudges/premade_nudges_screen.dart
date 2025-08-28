@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart'; // for HapticFeedback
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/nudge_model.dart';
 import '../../../data/premade_nudges_data.dart';
 import '../../../business_logic/cubits/nudges_cubit.dart';
+import '../nudges/nudge_edit_screen.dart';
+
 
 class PremadeNudgesScreen extends StatefulWidget {
   const PremadeNudgesScreen({super.key});
@@ -158,22 +161,28 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                     ),
                                   ),
                                   IconButton(
-                                    tooltip: 'Add to My Nudges',
-                                    onPressed: () {
-                                      context.read<NudgesCubit>().addToMyNudges(nudge.id);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('"${nudge.title}" added to My Nudges'),
-                                          backgroundColor: AppTheme.primaryPurple,
+                                    tooltip: 'Customize & Add',
+                                    onPressed: () async {
+                                      final added = await Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => NudgeEditScreen(template: nudge),
                                         ),
                                       );
+                                      if (added == true && context.mounted) {
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Nudge added to My Nudges'),
+                                            duration: Duration(milliseconds: 900),
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
                                     },
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      color: AppTheme.primaryPurple,
-                                    ),
+                                    icon: const Icon(Icons.add_circle_outline, color: AppTheme.primaryPurple),
                                   ),
                                 ],
+
                               ),
                               const SizedBox(height: 8),
                               Text(
