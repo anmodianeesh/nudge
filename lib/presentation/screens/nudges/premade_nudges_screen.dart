@@ -172,8 +172,8 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
                                         ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
-                                            content: Text('Nudge added to My Nudges'),
-                                            duration: Duration(milliseconds: 900),
+                                            content: Text('Nudge added'),
+                                            duration: Duration(milliseconds: 1500),
                                             behavior: SnackBarBehavior.floating,
                                           ),
                                         );

@@ -81,9 +81,10 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
 
     Navigator.of(context).pop(true);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Nudge added to My Nudges'),
-        duration: Duration(milliseconds: 900),
+      SnackBar(
+        content: Text('Nudge added to $_selectedWho'),
+
+        duration: Duration(milliseconds: 1000),
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -231,7 +232,7 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
               child: ElevatedButton.icon(
                 onPressed: _save,
                 icon: const Icon(Icons.check),
-                label: const Text('Add to My Nudges'),
+                label: Text('Add Nudge to $_selectedWho'),
               ),
             ),
             const SizedBox(height: 20), // Bottom padding to prevent cutoff
