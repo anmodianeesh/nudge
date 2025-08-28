@@ -146,14 +146,6 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: AppTheme.cardWhite,
         elevation: 0,
         automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: AppTheme.textDark),
-            onPressed: () {
-              // TODO: Navigate to profile
-            },
-          ),
-        ],
       ),
       body: BlocBuilder<NudgesCubit, NudgesState>(
         builder: (context, state) {
@@ -357,7 +349,7 @@ class _ActionHubState extends State<_ActionHub> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Add a scheduled nudge to start logging from Home',
+                'Add a scheduled nudge to start tracking from the Home page',
                 style: TextStyle(color: AppTheme.textGray),
               ),
             ),

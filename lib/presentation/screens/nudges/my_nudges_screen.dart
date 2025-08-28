@@ -376,20 +376,21 @@ List<Nudge> _applyFilters(NudgesState state) {
       },
       itemBuilder: (ctx) => const [
         PopupMenuItem(
-          value: _AddChoice.premade,
-          child: ListTile(
-            leading: Icon(Icons.lightbulb_outline),
-            title: Text('Browse premade'),
-          ),
-        ),
-        PopupMenuItem(
           value: _AddChoice.custom,
           child: ListTile(
             leading: Icon(Icons.auto_awesome),
-            title: Text('Create custom (AI Coach)'),
+            title: Text('Createa custom nudge (AI Coach)'),
           ),
         ),
-      ],
+      
+        PopupMenuItem(
+          value: _AddChoice.premade,
+          child: ListTile(
+            leading: Icon(Icons.lightbulb_outline),
+            title: Text('Browse premade nudges'),
+          ),
+        ),
+        ],
     ),
 ],
 ),
@@ -555,41 +556,6 @@ Row(
 
 enum _TypeFilter { all, premade, custom }
 
-class _TypeChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _TypeChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.primaryPurple.withOpacity(0.12) : AppTheme.backgroundGray,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? AppTheme.primaryPurple : AppTheme.borderGray,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? AppTheme.primaryPurple : AppTheme.textDark,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState();
