@@ -1,413 +1,491 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import 'chat_history_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
-
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with TickerProviderStateMixin {
-  final TextEditingController _messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+class _ChatScreenState extends State<ChatScreen> {
+  final _controller = TextEditingController();
+  final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
-  late AnimationController _typingAnimationController;
-
-  @override
-  void initState() {
-    super.initState();
-    _typingAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    )..repeat();
-    
-    // Add welcome message
-    _messages.add(
-      ChatMessage(
-        text: "Hi! I'm Nudge, your personal habit coach. I'm here to help you build better habits and achieve your goals. What would you like to work on today?",
-        isUser: false,
-        timestamp: DateTime.now(),
-      ),
-    );
-  }
 
   @override
   void dispose() {
-    _messageController.dispose();
+    _controller.dispose();
     _scrollController.dispose();
-    _typingAnimationController.dispose();
     super.dispose();
   }
 
-  void _sendMessage(String text) {
-    if (text.trim().isEmpty) return;
+  Future<void> _send(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || _isTyping) return;
 
     setState(() {
-      _messages.add(
-        ChatMessage(
-          text: text,
-          isUser: true,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _isTyping = true;
+      _messages.add(ChatMessage(role: MessageRole.user, text: trimmed, time: DateTime.now()));
+      _controller.clear();
     });
 
-    _messageController.clear();
+    // Switch to chat view immediately, then simulate reply (replace with real API)
+    setState(() => _isTyping = true);
+    await Future.delayed(const Duration(milliseconds: 600));
+    setState(() {
+      _messages.add(ChatMessage(
+        role: MessageRole.assistant,
+        text: _fakeCoachReply(trimmed),
+        time: DateTime.now(),
+      ));
+      _isTyping = false;
+    });
+
+    ChatArchive.autosaveFromMessages(_messages);
     _scrollToBottom();
-
-    // Simulate AI response
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() {
-          _messages.add(
-            ChatMessage(
-              text: _generateAIResponse(text),
-              isUser: false,
-              timestamp: DateTime.now(),
-            ),
-          );
-          _isTyping = false;
-        });
-        _scrollToBottom();
-      }
-    });
-  }
-
-  String _generateAIResponse(String userMessage) {
-    // Simple response logic - replace with actual AI integration
-    final message = userMessage.toLowerCase();
-    
-    if (message.contains('water') || message.contains('hydration')) {
-      return "Great question about hydration! I recommend starting with drinking a glass of water first thing when you wake up. You could also set hourly reminders on your phone. Would you like me to suggest a specific water intake goal based on your activity level?";
-    } else if (message.contains('exercise') || message.contains('workout')) {
-      return "Exercise habits are fantastic for both physical and mental health! Start small - even 10 minutes of walking daily can make a difference. What type of physical activity do you enjoy most? I can help create a sustainable routine.";
-    } else if (message.contains('sleep') || message.contains('bedtime')) {
-      return "Sleep is crucial for habit formation! Try creating a consistent bedtime routine: no screens 1 hour before bed, keep your room cool and dark, and go to bed at the same time each night. What's your biggest sleep challenge right now?";
-    } else if (message.contains('stress') || message.contains('anxious')) {
-      return "Managing stress is so important! Try the 4-7-8 breathing technique: inhale for 4, hold for 7, exhale for 8. I can also suggest mindfulness practices or quick stress-relief habits. What situations tend to stress you out most?";
-    } else if (message.contains('productivity') || message.contains('focus')) {
-      return "Let's boost your productivity! The Pomodoro Technique works great: 25 minutes focused work, then 5-minute break. Also try clearing your workspace before starting any task. What's your biggest productivity challenge?";
-    } else {
-      return "That's a great point! Building lasting habits is all about starting small and being consistent. I'd recommend picking just one habit to focus on first, making it so easy you can't say no. What's one small positive change you'd like to make in your daily routine?";
-    }
   }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
+          _scrollController.position.maxScrollExtent + 120,
+          duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
   }
 
-  Widget _buildMessage(ChatMessage message) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: message.isUser 
-            ? MainAxisAlignment.end 
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!message.isUser) ...[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Icon(
-                Icons.psychology_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: message.isUser 
-                    ? AppTheme.primaryPurple 
-                    : AppTheme.cardWhite,
-                borderRadius: BorderRadius.circular(20).copyWith(
-                  bottomLeft: message.isUser 
-                      ? const Radius.circular(20) 
-                      : const Radius.circular(4),
-                  bottomRight: message.isUser 
-                      ? const Radius.circular(4) 
-                      : const Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: message.isUser 
-                      ? Colors.white 
-                      : AppTheme.textDark,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ),
-          if (message.isUser) ...[
-            const SizedBox(width: 12),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryPurple.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Icon(
-                Icons.person,
-                color: AppTheme.primaryPurple,
-                size: 20,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+  String _fakeCoachReply(String userText) {
+    if (userText.toLowerCase().contains('water')) {
+      return "Great start. One glass now, one after lunch. Want a reminder?";
+    }
+    if (userText.toLowerCase().contains('sleep')) {
+      return "Try a 10-minute wind-down at 21:30. I can nudge you.";
+    }
+    if (userText.toLowerCase().contains('study')) {
+      return "2-minute focus sprint: open the doc, add one bullet. I’ll check back.";
+    }
+    return "Got it. Let’s turn this into a tiny step you can do today.";
   }
 
-  Widget _buildTypingIndicator() {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(
-              Icons.psychology_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppTheme.cardWhite,
-              borderRadius: BorderRadius.circular(20).copyWith(
-                bottomLeft: const Radius.circular(4),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildTypingDot(0),
-                const SizedBox(width: 4),
-                _buildTypingDot(1),
-                const SizedBox(width: 4),
-                _buildTypingDot(2),
-              ],
-            ),
-          ),
-        ],
-      ),
+  Future<void> _openHistory() async {
+    final picked = await Navigator.of(context).push<ChatSession>(
+      MaterialPageRoute(builder: (_) => const ChatHistoryScreen()),
     );
+    if (picked != null) {
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(picked.messages);
+      });
+      _scrollToBottom();
+    }
   }
 
-  Widget _buildTypingDot(int index) {
-    return AnimatedBuilder(
-      animation: _typingAnimationController,
-      builder: (context, child) {
-        final double value = (0.5 + 0.5 * 
-          (index == 0 ? _typingAnimationController.value :
-           index == 1 ? (_typingAnimationController.value + 0.33) % 1.0 :
-           (_typingAnimationController.value + 0.66) % 1.0)).clamp(0.3, 1.0);
-        
-        return Opacity(
-          opacity: value,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: AppTheme.textGray,
-              borderRadius: BorderRadius.circular(4),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildMessageInput() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundGray,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: TextField(
-                  controller: _messageController,
-                  decoration: const InputDecoration(
-                    hintText: 'Ask me anything about habits...',
-                    hintStyle: TextStyle(color: AppTheme.textGray),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.textDark,
-                  ),
-                  textCapitalization: TextCapitalization.sentences,
-                  onSubmitted: _sendMessage,
-                  maxLines: null,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => _sendMessage(_messageController.text),
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: AppTheme.primaryGradient,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.send_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  void _newChat() {
+    if (_messages.isNotEmpty) ChatArchive.saveSessionFromMessages(_messages);
+    setState(() {
+      _messages.clear();
+      _isTyping = false;
+      _controller.clear();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final empty = _messages.isEmpty;
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundGray,
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.psychology_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Nudge AI',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                Text(
-                  'Online',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.green,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
         backgroundColor: AppTheme.cardWhite,
         elevation: 0,
-        automaticallyImplyLeading: true,
-        iconTheme: const IconThemeData(color: AppTheme.textDark),
+        title: Text(empty ? 'New chat' : 'AI Coach'),
+        actions: [
+          IconButton(
+            tooltip: 'Previous chats',
+            icon: const Icon(Icons.history_rounded),
+            onPressed: _openHistory,
+          ),
+          if (!empty)
+            IconButton(
+              tooltip: 'New chat',
+              icon: const Icon(Icons.add_circle_outline_rounded),
+              onPressed: _newChat,
+            ),
+        ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              itemCount: _messages.length + (_isTyping ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length) {
-                  return _buildTypingIndicator();
-                }
-                return _buildMessage(_messages[index]);
-              },
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: empty ? _WelcomePane(
+          key: const ValueKey('welcome'),
+          controller: _controller,
+          onSend: _send,
+          onHistoryTap: _openHistory,
+        ) : _ChatPane(
+          key: const ValueKey('chat'),
+          messages: _messages,
+          isTyping: _isTyping,
+          controller: _controller,
+          scrollController: _scrollController,
+          onSend: _send,
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------- WELCOME (centered) -------------------- */
+
+class _WelcomePane extends StatelessWidget {
+  const _WelcomePane({
+    super.key,
+    required this.controller,
+    required this.onSend,
+    required this.onHistoryTap,
+  });
+
+  final TextEditingController controller;
+  final Future<void> Function(String) onSend;
+  final VoidCallback onHistoryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo + name
+                const SizedBox(height: 8),
+                const CircleAvatar(
+                  radius: 36,
+                  backgroundColor: AppTheme.cardWhite,
+                  child: Icon(Icons.auto_awesome_rounded, size: 36, color: AppTheme.textDark),
+                ),
+                const SizedBox(height: 12),
+                const Text('nudge', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 28),
+
+                // Big prompt card
+                Material(
+                  color: AppTheme.cardWhite,
+                  borderRadius: BorderRadius.circular(20),
+                  elevation: 0,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.edit_rounded, color: AppTheme.textGray),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            autofocus: false,
+                            maxLines: 3,
+                            minLines: 1,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: onSend,
+                            decoration: const InputDecoration(
+                              hintText: 'Describe your perfect routine',
+                              border: InputBorder.none,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Send',
+                          onPressed: () {
+                            final t = controller.text.trim();
+                            if (t.isNotEmpty) onSend(t);
+                          },
+                          icon: const Icon(Icons.arrow_upward_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: onHistoryTap,
+                  icon: const Icon(Icons.history_rounded),
+                  label: const Text('Previous chats'),
+                  style: TextButton.styleFrom(foregroundColor: AppTheme.textGray),
+                ),
+                const SizedBox(height: 32),
+              ],
             ),
           ),
-          _buildMessageInput(),
+        ),
+      ),
+    );
+  }
+}
+
+/* -------------------- CHAT (after first send) -------------------- */
+
+class _ChatPane extends StatelessWidget {
+  const _ChatPane({
+    super.key,
+    required this.messages,
+    required this.isTyping,
+    required this.controller,
+    required this.scrollController,
+    required this.onSend,
+  });
+
+  final List<ChatMessage> messages;
+  final bool isTyping;
+  final TextEditingController controller;
+  final ScrollController scrollController;
+  final Future<void> Function(String) onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.separated(
+            controller: scrollController,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppConstants.paddingLarge,
+              vertical: AppConstants.paddingLarge,
+            ),
+            itemCount: messages.length + (isTyping ? 1 : 0),
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (context, index) {
+              if (isTyping && index == messages.length) return const _TypingDots();
+              final m = messages[index];
+              return _ChatBubble(message: m);
+            },
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppConstants.paddingLarge, 8, AppConstants.paddingLarge, AppConstants.paddingLarge),
+            child: _Composer(
+              controller: controller,
+              onSend: onSend,
+              enabled: !isTyping,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/* -------------------- Reusable pieces -------------------- */
+
+class _Composer extends StatelessWidget {
+  const _Composer({required this.controller, required this.onSend, required this.enabled});
+  final TextEditingController controller;
+  final Future<void> Function(String) onSend;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.cardWhite,
+      borderRadius: BorderRadius.circular(20),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              enabled: enabled,
+              minLines: 1, maxLines: 5,
+              textInputAction: TextInputAction.newline,
+              decoration: const InputDecoration(
+                hintText: 'Message Nudge…',
+                border: InputBorder.none,
+                isDense: true,
+              ),
+              onSubmitted: (v) { if (v.trim().isNotEmpty) onSend(v); },
+            ),
+          ),
+          IconButton(
+            tooltip: 'Send',
+            onPressed: enabled && controller.text.trim().isNotEmpty
+                ? () => onSend(controller.text) : null,
+            icon: const Icon(Icons.send_rounded),
+          ),
         ],
       ),
     );
   }
 }
 
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
+class _ChatBubble extends StatelessWidget {
+  const _ChatBubble({required this.message});
+  final ChatMessage message;
 
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.timestamp,
-  });
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.role == MessageRole.user;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: [
+        if (!isUser)
+          const CircleAvatar(
+            radius: 14,
+            backgroundColor: AppTheme.primaryPurple,
+            child: Icon(Icons.psychology_rounded, size: 16, color: Colors.white),
+          ),
+        if (!isUser) const SizedBox(width: 8),
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: isUser ? AppTheme.primaryBlue.withOpacity(0.10) : AppTheme.cardWhite,
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(isUser ? 16 : 4),
+                bottomRight: Radius.circular(isUser ? 4 : 16),
+              ),
+              border: Border.all(color: AppTheme.borderGray),
+            ),
+            child: Text(message.text, style: const TextStyle(height: 1.35)),
+          ),
+        ),
+        if (isUser) const SizedBox(width: 8),
+        if (isUser)
+          const CircleAvatar(
+            radius: 14,
+            backgroundColor: AppTheme.textDark,
+            child: Icon(Icons.person, size: 16, color: Colors.white),
+          ),
+      ],
+    );
+  }
+}
+
+class _TypingDots extends StatefulWidget {
+  const _TypingDots();
+  @override
+  State<_TypingDots> createState() => _TypingDotsState();
+}
+class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController _ac =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  @override
+  void dispose() { _ac.dispose(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const CircleAvatar(
+          radius: 14,
+          backgroundColor: AppTheme.primaryPurple,
+          child: Icon(Icons.psychology_rounded, size: 16, color: Colors.white),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: AppTheme.cardWhite,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.borderGray),
+          ),
+          child: AnimatedBuilder(
+            animation: _ac,
+            builder: (_, __) {
+              final v = (t) => (1 + 0.5 * (1 + MathUtils.sin(2 * 3.1415 * (t)))) / 2;
+              final t = _ac.value;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(3, (i) {
+                  final scale = v((t + i / 3) % 1);
+                  return Padding(
+                    padding: EdgeInsets.only(right: i == 2 ? 0 : 6),
+                    child: Transform.scale(scale: 0.8 + 0.25 * scale, child: const _Dot()),
+                  );
+                }),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+class _Dot extends StatelessWidget {
+  const _Dot();
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 6, height: 6,
+      child: DecoratedBox(decoration: BoxDecoration(color: AppTheme.textGray, shape: BoxShape.circle)),
+    );
+  }
+}
+
+/* -------------------- Lightweight models & archive -------------------- */
+
+enum MessageRole { user, assistant }
+class ChatMessage {
+  final MessageRole role; final String text; final DateTime time;
+  ChatMessage({required this.role, required this.text, required this.time});
+}
+class ChatSession {
+  final String id; final String title; final DateTime updatedAt; final List<ChatMessage> messages;
+  ChatSession({required this.id, required this.title, required this.updatedAt, required this.messages});
+}
+class ChatArchive {
+  static final List<ChatSession> _sessions = [];
+  static void saveSessionFromMessages(List<ChatMessage> messages) {
+    if (messages.isEmpty) return;
+    final title = _deriveTitle(messages);
+    _sessions.insert(0, ChatSession(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      title: title, updatedAt: DateTime.now(),
+      messages: List<ChatMessage>.from(messages),
+    ));
+  }
+  static void autosaveFromMessages(List<ChatMessage> messages) {
+    if (messages.isEmpty) return;
+    final title = _deriveTitle(messages);
+    if (_sessions.isEmpty) {
+      saveSessionFromMessages(messages);
+    } else {
+      _sessions[0] = ChatSession(
+        id: _sessions[0].id, title: title, updatedAt: DateTime.now(),
+        messages: List<ChatMessage>.from(messages),
+      );
+    }
+  }
+  static List<ChatSession> all() => List.unmodifiable(_sessions);
+  static void delete(String id) => _sessions.removeWhere((s) => s.id == id);
+  static String _deriveTitle(List<ChatMessage> messages) {
+    final firstUser = messages.firstWhere((m) => m.role == MessageRole.user, orElse: () => messages.first);
+    final t = firstUser.text.trim();
+    return t.length <= 40 ? t : '${t.substring(0, 40)}…';
+  }
+}
+
+class MathUtils {
+  static double sin(double x) => _sinApprox(x);
+  static double _sinApprox(double x) {
+    const pi = 3.1415926535897932;
+    x = x % (2 * pi);
+    if (x > pi) x -= 2 * pi;
+    if (x < -pi) x += 2 * pi;
+    final y = (16 * x * (pi - x)) / (5 * pi * pi - 4 * x * (pi - x));
+    return y.clamp(-1.0, 1.0);
+  }
 }

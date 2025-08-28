@@ -20,25 +20,24 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
   late TextEditingController _title;
   late TextEditingController _desc;
 
-  // Category (dropdown) and emoji icon
+  // Category
   late String _category;
-  String _iconEmoji = '✨';
 
-  // schedule
+  // Schedule
   ScheduleKind _kind = ScheduleKind.timesPerDay;
   int _dailyTarget = 1;
+
+  // Who selector
+  String _selectedWho = 'Self';
 
   @override
   void initState() {
     super.initState();
     _title = TextEditingController(text: widget.template.title);
     _desc  = TextEditingController(text: widget.template.description);
-
-    // default category/icon
     _category  = widget.template.category;
-    _iconEmoji = _extractEmojiOrFallback(widget.template.icon);
 
-    // pull template schedule if present
+    // Pull template schedule if present
     final s = context.read<NudgesCubit>().state.schedules[widget.template.id];
     if (s != null) {
       _kind = s.kind;
@@ -49,13 +48,6 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
     }
   }
 
-  String _extractEmojiOrFallback(String icon) {
-    // If template was using a Material icon name before, fall back to a default emoji.
-    // If it already contains an emoji (length==1 or composed), keep it.
-    final r = RegExp(r'[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]', unicode: true);
-    return r.hasMatch(icon) ? icon : '✨';
-  }
-
   @override
   void dispose() {
     _title.dispose();
@@ -63,13 +55,13 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
     super.dispose();
   }
 
-  Future<void> _pickEmoji() async {
-    final chosen = await showDialog<String>(
+  Future<void> _selectWho() async {
+    final selected = await showDialog<String>(
       context: context,
-      builder: (ctx) => const _EmojiPickerDialog(),
+      builder: (ctx) => const _WhoSelectorDialog(),
     );
-    if (chosen != null && chosen.isNotEmpty) {
-      setState(() => _iconEmoji = chosen);
+    if (selected != null) {
+      setState(() => _selectedWho = selected);
     }
   }
 
@@ -83,7 +75,7 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
           title: _title.text,
           description: _desc.text,
           category: _category,
-          icon: _iconEmoji, // store the emoji directly in Nudge.icon
+          icon: '✨', // Default icon since emoji picker removed
           schedule: schedule,
         );
 
@@ -99,7 +91,6 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // categories from user’s current nudges + template category (safe default)
     final state = context.watch<NudgesCubit>().state;
     final categories = <String>{
       widget.template.category,
@@ -107,7 +98,6 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
     }.toList()
       ..sort();
 
-    // ensure current category exists
     if (!categories.contains(_category)) categories.insert(0, _category);
 
     return Scaffold(
@@ -123,14 +113,13 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             // Title
-            _LabeledField(
+            _StyledFormField(
               label: 'Title',
               child: TextFormField(
                 controller: _title,
                 decoration: const InputDecoration(
                   hintText: 'e.g., Drink Water',
-                  border: OutlineInputBorder(),
-                  filled: true,
+                  border: InputBorder.none,
                 ),
                 validator: (v) =>
                     (v == null || v.trim().isEmpty) ? 'Please enter a title' : null,
@@ -139,89 +128,37 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
             const SizedBox(height: 12),
 
             // Description
-            _LabeledField(
+            _StyledFormField(
               label: 'Description',
               child: TextFormField(
                 controller: _desc,
                 maxLines: 3,
                 decoration: const InputDecoration(
                   hintText: 'Why/what to do',
-                  border: OutlineInputBorder(),
-                  filled: true,
+                  border: InputBorder.none,
                 ),
               ),
             ),
             const SizedBox(height: 12),
-// ⬇️ REPLACE the Row(...) that wraps Category + Icon with this:
-LayoutBuilder(
-  builder: (context, constraints) {
-    final isNarrow = constraints.maxWidth < 360; // tweak threshold if needed
 
-    final categoryField = _LabeledField(
-      label: 'Category',
-      child: DropdownButtonFormField<String>(
-        isExpanded: true, // ✅ let text shrink with ellipsis
-        value: _category,
-        items: categories
-            .map((c) => DropdownMenuItem(
-                  value: c,
-                  child: Text(c, overflow: TextOverflow.ellipsis),
-                ))
-            .toList(),
-        onChanged: (v) => setState(() => _category = v ?? _category),
-        decoration: const InputDecoration(
-          border: OutlineInputBorder(),
-          filled: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        ),
-      ),
-    );
-
-    final emojiField = _LabeledField(
-      label: 'Icon (emoji)',
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onPressed: _pickEmoji,
-        child: Row(
-          children: [
-            Text(_iconEmoji, style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text('Choose emoji', overflow: TextOverflow.ellipsis),
+            // Category
+            _StyledFormField(
+              label: 'Category',
+              child: DropdownButtonFormField<String>(
+                value: _category,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                ),
+                items: categories
+                    .map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c, overflow: TextOverflow.ellipsis),
+                        ))
+                    .toList(),
+                onChanged: (v) => setState(() => _category = v ?? _category),
+              ),
             ),
-            const Icon(Icons.expand_more),
-          ],
-        ),
-      ),
-    );
-
-    if (isNarrow) {
-      // Stack vertically on narrow screens – no overflow possible
-      return Column(
-        children: [
-          categoryField,
-          const SizedBox(height: 12),
-          emojiField,
-        ],
-      );
-    }
-
-    // Wide enough: show side-by-side with flex
-    return Row(
-      children: [
-        Expanded(flex: 7, child: categoryField),
-        const SizedBox(width: 12),
-        Expanded(flex: 5, child: emojiField),
-      ],
-    );
-  },
-),
-
-            // Category (dropdown) + Emoji picker
-            
             const SizedBox(height: 16),
 
             // Schedule
@@ -242,9 +179,53 @@ LayoutBuilder(
                 _dailyTarget = t <= 0 ? 1 : t;
               }),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Save
+            // Who selector
+            const Text(
+              'Who',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Card(
+              color: AppTheme.cardWhite,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _selectWho,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedWho == 'Self' ? Icons.person : 
+                        _selectedWho.contains('School') || _selectedWho.contains('Work') ? Icons.group : 
+                        Icons.person_outline,
+                        color: AppTheme.textDark,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _selectedWho,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                      ),
+                      const Icon(Icons.expand_more, color: AppTheme.textGray),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32), // Extra padding before button
+
+            // Save button
             SizedBox(
               height: 48,
               child: ElevatedButton.icon(
@@ -253,6 +234,7 @@ LayoutBuilder(
                 label: const Text('Add to My Nudges'),
               ),
             ),
+            const SizedBox(height: 20), // Bottom padding to prevent cutoff
           ],
         ),
       ),
@@ -260,23 +242,33 @@ LayoutBuilder(
   }
 }
 
-class _LabeledField extends StatelessWidget {
+class _StyledFormField extends StatelessWidget {
   final String label;
   final Widget child;
-  const _LabeledField({required this.label, required this.child});
+  const _StyledFormField({required this.label, required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textDark,
-            )),
-        const SizedBox(height: 6),
-        child,
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textDark,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          color: AppTheme.cardWhite,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: child,
+          ),
+        ),
       ],
     );
   }
@@ -299,18 +291,24 @@ class _SchedulePicker extends StatelessWidget {
       color: AppTheme.cardWhite,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Kind
             Row(
               children: [
-                const Text('Type:'),
+                const Text(
+                  'Type:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textDark,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButton<ScheduleKind>(
-                    isExpanded: true, // ✅ avoid overflow here too
+                    isExpanded: true,
                     value: kind,
+                    underline: Container(),
                     onChanged: (k) {
                       if (k == null) return;
                       final t = (k == ScheduleKind.continuous) ? 1 : (dailyTarget <= 0 ? 1 : dailyTarget);
@@ -326,23 +324,30 @@ class _SchedulePicker extends StatelessWidget {
                 ),
               ],
             ),
-
-            const SizedBox(height: 12),
-            // Target
+            const SizedBox(height: 16),
             if (kind != ScheduleKind.continuous)
               Row(
                 children: [
-                  const Text('Target today:'),
+                  const Text(
+                    'Target today:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   SizedBox(
                     width: 90,
                     child: TextFormField(
                       initialValue: dailyTarget.toString(),
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         isDense: true,
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: AppTheme.borderGray),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       ),
                       onChanged: (v) {
                         final n = int.tryParse(v) ?? dailyTarget;
@@ -367,156 +372,114 @@ class _SchedulePicker extends StatelessWidget {
   }
 }
 
-class _EmojiPickerDialog extends StatefulWidget {
-  const _EmojiPickerDialog();
+class _WhoSelectorDialog extends StatefulWidget {
+  const _WhoSelectorDialog();
 
   @override
-  State<_EmojiPickerDialog> createState() => _EmojiPickerDialogState();
+  State<_WhoSelectorDialog> createState() => _WhoSelectorDialogState();
 }
 
-class _EmojiPickerDialogState extends State<_EmojiPickerDialog> {
-  final TextEditingController _q = TextEditingController();
-  late List<_EmojiItem> _items;
-  late List<_EmojiItem> _filtered;
+class _WhoSelectorDialogState extends State<_WhoSelectorDialog> {
+  final TextEditingController _searchController = TextEditingController();
+  final List<Map<String, dynamic>> _allOptions = [
+    {'name': 'Self', 'type': 'individual', 'icon': Icons.person},
+    {'name': 'John', 'type': 'friend', 'icon': Icons.person_outline},
+    {'name': 'Oliver', 'type': 'friend', 'icon': Icons.person_outline},
+    {'name': 'School', 'type': 'group', 'icon': Icons.school},
+    {'name': 'Work', 'type': 'group', 'icon': Icons.work},
+  ];
+  
+  late List<Map<String, dynamic>> _filteredOptions;
 
   @override
   void initState() {
     super.initState();
-    _items = _emojiCatalog;
-    _filtered = _items;
+    _filteredOptions = _allOptions;
   }
 
   @override
   void dispose() {
-    _q.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
-  void _filter(String query) {
-    final q = query.trim().toLowerCase();
+  void _filterOptions(String query) {
     setState(() {
-      if (q.isEmpty) {
-        _filtered = _items;
+      if (query.isEmpty) {
+        _filteredOptions = _allOptions;
       } else {
-        _filtered = _items.where((e) {
-          if (e.name.contains(q)) return true;
-          for (final k in e.keywords) {
-            if (k.contains(q)) return true;
-          }
-          return false;
-        }).toList();
+        _filteredOptions = _allOptions
+            .where((option) =>
+                option['name'].toLowerCase().contains(query.toLowerCase()))
+            .toList();
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final grid = GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 6,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: _filtered.length,
-      itemBuilder: (_, i) {
-        final it = _filtered[i];
-        return InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => Navigator.of(context).pop(it.emoji),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppTheme.backgroundGray,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.borderGray),
-            ),
-            child: Center(child: Text(it.emoji, style: const TextStyle(fontSize: 22))),
-          ),
-        );
-      },
-    );
-
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: 380,
-        height: 420,
+      child: Container(
+        width: 320,
+        height: 400,
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const SizedBox(height: 12),
-            const Text('Pick an emoji', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: TextField(
-                controller: _q,
-                onChanged: _filter,
-                decoration: InputDecoration(
-                  hintText: 'Search emoji… (e.g., water, run, sleep)',
-                  prefixIcon: const Icon(Icons.search),
-                  isDense: true,
-                  filled: true,
-                  fillColor: AppTheme.backgroundGray,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  suffixIcon: _q.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () {
-                            _q.clear();
-                            _filter('');
-                          },
-                        ),
-                ),
+            const Text(
+              'Who is this nudge for?',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textDark,
               ),
             ),
-            const SizedBox(height: 8),
-            Expanded(child: grid),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _searchController,
+              onChanged: _filterOptions,
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: AppTheme.borderGray),
+                ),
+                filled: true,
+                fillColor: AppTheme.backgroundGray,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _filteredOptions.length,
+                itemBuilder: (context, index) {
+                  final option = _filteredOptions[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: Icon(
+                        option['icon'],
+                        color: AppTheme.primaryPurple,
+                      ),
+                      title: Text(option['name']),
+                      subtitle: Text(
+                        option['type'] == 'individual' ? 'Individual' :
+                        option['type'] == 'friend' ? 'Friend' : 'Group',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textGray,
+                        ),
+                      ),
+                      onTap: () => Navigator.of(context).pop(option['name']),
+                    ),
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
-class _EmojiItem {
-  final String emoji;
-  final String name;
-  final List<String> keywords;
-  const _EmojiItem(this.emoji, this.name, this.keywords);
-}
-
-// Minimal catalog (extend as needed)
-const List<_EmojiItem> _emojiCatalog = [
-  _EmojiItem('💧', 'water', ['drink','hydrate','thirst','glass']),
-  _EmojiItem('🥤', 'drink', ['water','hydrate','cup','beverage']),
-  _EmojiItem('🚶‍♂️', 'walk', ['steps','exercise','move']),
-  _EmojiItem('🏃‍♀️', 'run', ['jog','exercise','fitness']),
-  _EmojiItem('🧘', 'meditate', ['calm','mindfulness','breathe']),
-  _EmojiItem('🛏️', 'sleep', ['bedtime','rest','night']),
-  _EmojiItem('🍎', 'fruit', ['health','eat','food']),
-  _EmojiItem('🥦', 'veggies', ['health','eat','food']),
-  _EmojiItem('📵', 'digital detox', ['phone','screen','limit']),
-  _EmojiItem('📚', 'study', ['read','learn','focus']),
-  _EmojiItem('🧹', 'clean', ['tidy','chores','house']),
-  _EmojiItem('❤️', 'heart', ['love','relationship']),
-  _EmojiItem('📞', 'call', ['phone','family','friend']),
-  _EmojiItem('☀️', 'morning', ['sun','wake','day']),
-  _EmojiItem('🌙', 'night', ['evening','sleep']),
-  _EmojiItem('🔥', 'motivation', ['streak','goal']),
-  _EmojiItem('🧠', 'focus', ['work','deep','productivity']),
-  _EmojiItem('💤', 'nap', ['rest','sleep']),
-  _EmojiItem('🧴', 'skincare', ['health','routine']),
-  _EmojiItem('🧑‍🍳', 'cook', ['meal','food']),
-  _EmojiItem('🧴', 'hydrate skin', ['moisturize','skincare']),
-  _EmojiItem('📝', 'journal', ['write','reflect']),
-  _EmojiItem('🎧', 'listen', ['podcast','music']),
-  _EmojiItem('📖', 'read', ['book','study']),
-  _EmojiItem('🕒', 'on time', ['schedule','punctual']),
-  _EmojiItem('✨', 'sparkle', ['general','default']),
-];
