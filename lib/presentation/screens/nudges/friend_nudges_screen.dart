@@ -31,7 +31,94 @@ class _FriendNudgesScreenState extends State<FriendNudgesScreen> {
       'streak': 12,
     },
   ];
-
+void _showFriendNudgeOptions(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Friend Nudge Options',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.psychology_outlined,
+                color: AppTheme.primaryPurple,
+              ),
+            ),
+            title: const Text('AI Suggestions'),
+            subtitle: const Text('Get AI ideas for friend challenges'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to AI chat for friend nudges
+            },
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.person_add_outlined,
+                color: Colors.green,
+              ),
+            ),
+            title: const Text('Invite Friend'),
+            subtitle: const Text('Start accountability with a friend'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to invite friend screen
+            },
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.library_books_outlined,
+                color: Colors.blue,
+              ),
+            ),
+            title: const Text('Browse Templates'),
+            subtitle: const Text('Choose from friend challenge templates'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to friend templates screen
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final filteredNudges = _friendNudges.where((nudge) {
@@ -49,9 +136,7 @@ class _FriendNudgesScreenState extends State<FriendNudgesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // Navigate to invite friend for nudge
-            },
+            onPressed: () => _showFriendNudgeOptions(context),
           ),
         ],
       ),

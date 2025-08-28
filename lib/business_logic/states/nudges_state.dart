@@ -1,8 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:nudge/data/models/nudge_model.dart';
 
-
-
 enum ScheduleKind { hourly, timesPerDay, specificTimes, continuous }
 
 class NudgeScheduleSimple {
@@ -10,7 +8,6 @@ class NudgeScheduleSimple {
   final int dailyTarget; // e.g., 8 glasses of water; for hourly use awake-hours
   const NudgeScheduleSimple({required this.kind, required this.dailyTarget});
 }
-
 
 /// Helper: yyyy-mm-dd key (local time).
 String dateKey(DateTime dt) {
@@ -22,11 +19,8 @@ String dateKey(DateTime dt) {
 }
 
 class NudgesState {
-
   final Map<String, NudgeScheduleSimple> schedules; // nudgeId -> schedule
   final Map<String, Map<String, int>> dailyLogs;    // dateKey -> {nudgeId -> count}
-
-
 
   /// All available nudges (premade/custom merged later if needed).
   final List<Nudge> allNudges;
@@ -50,54 +44,52 @@ class NudgesState {
   final String? error;
 
   const NudgesState({
-  this.allNudges = const [],
-  this.myNudgeIds = const {},
-  this.pausedIds = const {},
-  this.completedTodayIds = const {},
-  this.snoozedUntil = const {},
-  this.completionsByDate = const {},
-  this.schedules = const {},
-  this.dailyLogs = const {},
-  this.error,
-});
+    this.allNudges = const [],
+    this.myNudgeIds = const {},
+    this.pausedIds = const {},
+    this.completedTodayIds = const {},
+    this.snoozedUntil = const {},
+    this.completionsByDate = const {},
+    this.schedules = const {},
+    this.dailyLogs = const {},
+    this.error,
+  });
 
+  /// yyyy-mm-dd key in local time
+  static String dateKey(DateTime dt) {
+    final local = dt.toLocal();
+    final y = local.year.toString().padLeft(4, '0');
+    final m = local.month.toString().padLeft(2, '0');
+    final d = local.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
 
-/// yyyy-mm-dd key in local time
-static String dateKey(DateTime dt) {
-  final local = dt.toLocal();
-  final y = local.year.toString().padLeft(4, '0');
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  return '$y-$m-$d';
-}
+  int dailyCountFor(String nudgeId, DateTime day) {
+    final key = dateKey(day);
+    final m = dailyLogs[key];
+    if (m == null) return 0;
+    return m[nudgeId] ?? 0;
+  }
 
-int dailyCountFor(String nudgeId, DateTime day) {
-  final key = dateKey(day);
-  final m = dailyLogs[key];
-  if (m == null) return 0;
-  return m[nudgeId] ?? 0;
-}
+  bool isActionable(String nudgeId) {
+    final s = schedules[nudgeId];
+    if (s == null) return false;
+    return s.kind != ScheduleKind.continuous;
+  }
 
-bool isActionable(String nudgeId) {
-  final s = schedules[nudgeId];
-  if (s == null) return false;
-  return s.kind != ScheduleKind.continuous;
-}
+  /// Actionable nudges only (hourly / timesPerDay / specificTimes), excluding paused/snoozed
+  List<Nudge> get actionableNudges {
+    final now = DateTime.now();
+    return activeMyNudges.where((n) {
+      if (!isActionable(n.id)) return false;
+      final until = snoozedUntil[n.id];
+      if (until != null && now.isBefore(until)) return false;
+      return true;
+    }).toList()
+      ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+  }
 
-/// Actionable nudges only (hourly / timesPerDay / specificTimes), excluding paused/snoozed
-List<Nudge> get actionableNudges {
-  final now = DateTime.now();
-  return activeMyNudges.where((n) {
-    if (!isActionable(n.id)) return false;
-    final until = snoozedUntil[n.id];
-    if (until != null && now.isBefore(until)) return false;
-    return true;
-  }).toList()
-    ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-}
-
-
-  // ---------- Derived ----------
+  // ---------- Derived getters for all nudges ----------
   List<Nudge> get myNudges =>
       allNudges.where((n) => myNudgeIds.contains(n.id)).toList();
 
@@ -114,6 +106,70 @@ List<Nudge> get actionableNudges {
   List<Nudge> get pausedMyNudges =>
       myNudges.where((n) => pausedIds.contains(n.id)).toList();
 
+  // ---------- NEW: Categorized nudge getters ----------
+  
+  /// Personal nudges only (user's individual habits)
+  List<Nudge> get personalNudges =>
+      myNudges.where((n) => n.isPersonal).toList()
+        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+  /// Active personal nudges (not paused/snoozed)
+  List<Nudge> get activePersonalNudges {
+    final now = DateTime.now();
+    return personalNudges.where((n) {
+      if (pausedIds.contains(n.id)) return false;
+      final until = snoozedUntil[n.id];
+      if (until != null && now.isBefore(until)) return false;
+      return true;
+    }).toList();
+  }
+
+  /// Group nudges the user participates in
+  List<Nudge> get groupNudges =>
+      allNudges.where((n) => n.isGroup && n.participants.contains('self')).toList()
+        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+  /// Group nudges by group type
+  List<Nudge> groupNudgesForType(GroupType groupType) =>
+      groupNudges.where((n) => n.groupType == groupType).toList();
+
+  /// Group nudges for school
+  List<Nudge> get schoolNudges => groupNudgesForType(GroupType.school);
+  
+  /// Group nudges for work
+  List<Nudge> get workNudges => groupNudgesForType(GroupType.work);
+  
+  /// Group nudges for family
+  List<Nudge> get familyNudges => groupNudgesForType(GroupType.family);
+
+  /// Friend nudges (accountability with specific friends)
+  List<Nudge> get friendNudges =>
+      allNudges.where((n) => n.isFriend && n.participants.contains('self')).toList()
+        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+  /// Friend nudges with a specific friend
+  List<Nudge> friendNudgesWith(String friendId) =>
+      friendNudges.where((n) => n.friendId == friendId).toList();
+
+  /// Get all unique friends from friend nudges
+  List<String> get friendsList =>
+      friendNudges
+          .where((n) => n.friendName != null)
+          .map((n) => n.friendName!)
+          .toSet()
+          .toList()
+        ..sort();
+
+  /// Get all unique groups from group nudges
+  List<String> get groupsList =>
+      groupNudges
+          .where((n) => n.groupName != null)
+          .map((n) => n.groupName!)
+          .toSet()
+          .toList()
+        ..sort();
+
+  // ---------- Legacy methods (preserved) ----------
   bool isCompletedToday(String id) => completedTodayIds.contains(id);
   bool isPaused(String id) => pausedIds.contains(id);
   bool isSnoozed(String id) {
@@ -147,27 +203,48 @@ List<Nudge> get actionableNudges {
     return rates;
   }
 
+  /// Completion rates for personal nudges only
+  List<double> personalCompletionRates({int days = 7}) {
+    final total = activePersonalNudges.length;
+    if (total == 0) {
+      return List<double>.filled(days, 0.0);
+    }
+    final today = DateTime.now();
+    final List<double> rates = [];
+    for (int i = days - 1; i >= 0; i--) {
+      final day = DateTime(today.year, today.month, today.day).subtract(Duration(days: i));
+      final key = dateKey(day);
+      final completedSet = completionsByDate[key] ?? {};
+      final personalCompleted = completedSet.where((id) {
+        final nudge = allNudges.firstWhereOrNull((n) => n.id == id);
+        return nudge?.isPersonal == true;
+      }).length;
+      rates.add((personalCompleted / total).clamp(0.0, 1.0));
+    }
+    return rates;
+  }
+
   NudgesState copyWith({
-  List<Nudge>? allNudges,
-  Set<String>? myNudgeIds,
-  Set<String>? pausedIds,
-  Set<String>? completedTodayIds,
-  Map<String, DateTime>? snoozedUntil,
-  Map<String, Set<String>>? completionsByDate,
-  Map<String, NudgeScheduleSimple>? schedules,
-  Map<String, Map<String, int>>? dailyLogs,
-  String? error,
-}) {
-  return NudgesState(
-    allNudges: allNudges ?? this.allNudges,
-    myNudgeIds: myNudgeIds ?? this.myNudgeIds,
-    pausedIds: pausedIds ?? this.pausedIds,
-    completedTodayIds: completedTodayIds ?? this.completedTodayIds,
-    snoozedUntil: snoozedUntil ?? this.snoozedUntil,
-    completionsByDate: completionsByDate ?? this.completionsByDate,
-    schedules: schedules ?? this.schedules,
-    dailyLogs: dailyLogs ?? this.dailyLogs,
-    error: error,
-  );
-}
+    List<Nudge>? allNudges,
+    Set<String>? myNudgeIds,
+    Set<String>? pausedIds,
+    Set<String>? completedTodayIds,
+    Map<String, DateTime>? snoozedUntil,
+    Map<String, Set<String>>? completionsByDate,
+    Map<String, NudgeScheduleSimple>? schedules,
+    Map<String, Map<String, int>>? dailyLogs,
+    String? error,
+  }) {
+    return NudgesState(
+      allNudges: allNudges ?? this.allNudges,
+      myNudgeIds: myNudgeIds ?? this.myNudgeIds,
+      pausedIds: pausedIds ?? this.pausedIds,
+      completedTodayIds: completedTodayIds ?? this.completedTodayIds,
+      snoozedUntil: snoozedUntil ?? this.snoozedUntil,
+      completionsByDate: completionsByDate ?? this.completionsByDate,
+      schedules: schedules ?? this.schedules,
+      dailyLogs: dailyLogs ?? this.dailyLogs,
+      error: error,
+    );
+  }
 }

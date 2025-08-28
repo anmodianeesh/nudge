@@ -21,6 +21,9 @@ class NudgesCubit extends Cubit<NudgesState> {
       scheds[n.id] = _defaultScheduleFor(n);
     }
 
+    // Add some mock group and friend nudges for demo
+    _addMockGroupAndFriendNudges(all, scheds);
+
     emit(state.copyWith(
       allNudges: all,
       schedules: scheds,
@@ -28,8 +31,72 @@ class NudgesCubit extends Cubit<NudgesState> {
     ));
   }
 
+  /// Add mock group and friend nudges for demonstration
+  void _addMockGroupAndFriendNudges(List<Nudge> allNudges, Map<String, NudgeScheduleSimple> schedules) {
+    // Mock group nudges
+    final groupNudge1 = NudgeFactory.createGroup(
+      id: 'group_school_1',
+      title: 'Submit Assignment',
+      description: 'Complete and submit weekly assignment',
+      category: 'Academic',
+      icon: '📚',
+      groupId: 'school_group_1',
+      groupName: 'School',
+      groupType: GroupType.school,
+      createdBy: 'teacher_123',
+      participants: ['self', 'student_1', 'student_2', 'student_3'],
+      dueDate: DateTime.now().add(Duration(days: 1)),
+    );
+
+    final groupNudge2 = NudgeFactory.createGroup(
+      id: 'group_work_1',
+      title: 'Team Stand-up',
+      description: 'Attend daily team meeting',
+      category: 'Work',
+      icon: '💼',
+      groupId: 'work_team_1',
+      groupName: 'Work',
+      groupType: GroupType.work,
+      createdBy: 'manager_456',
+      participants: ['self', 'colleague_1', 'colleague_2'],
+    );
+
+    // Mock friend nudges
+    final friendNudge1 = NudgeFactory.createFriend(
+      id: 'friend_john_1',
+      title: 'Morning Run',
+      description: 'Run 3 miles together',
+      category: 'Fitness',
+      icon: '🏃‍♂️',
+      friendId: 'john_123',
+      friendName: 'John',
+      createdBy: 'self',
+      streak: 5,
+    );
+
+    final friendNudge2 = NudgeFactory.createFriend(
+      id: 'friend_oliver_1',
+      title: 'Read Daily',
+      description: 'Read for 30 minutes',
+      category: 'Learning',
+      icon: '📖',
+      friendId: 'oliver_456',
+      friendName: 'Oliver',
+      createdBy: 'self',
+      streak: 12,
+    );
+
+    allNudges.addAll([groupNudge1, groupNudge2, friendNudge1, friendNudge2]);
+    
+    // Add schedules for mock nudges
+    schedules[groupNudge1.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+    schedules[groupNudge2.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+    schedules[friendNudge1.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+    schedules[friendNudge2.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
-  // My Nudges – add / remove / pause / snooze
+  // My Nudges – add / remove / pause / snooze (UPDATED)
   // ─────────────────────────────────────────────────────────────────────────────
 
   /// Add an existing nudge (by id) to "My Nudges".
@@ -75,7 +142,6 @@ class NudgesCubit extends Cubit<NudgesState> {
       daily[k] = nv;
     });
 
-    // Optionally keep schedule (so if user re-adds, we remember). Here we keep it.
     emit(state.copyWith(
       myNudgeIds: my,
       pausedIds: paused,
@@ -114,7 +180,239 @@ class NudgesCubit extends Cubit<NudgesState> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Completion (binary) – legacy toggle for “done today”
+  // NEW: Personal Nudge Creation
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Create a personal nudge from scratch
+  void createPersonalNudge({
+    required String title,
+    required String description,
+    required String category,
+    required String icon,
+    required NudgeScheduleSimple schedule,
+  }) {
+    final newId = _generateId();
+    
+    final newNudge = NudgeFactory.createPersonal(
+      id: newId,
+      title: title.trim(),
+      description: description.trim(),
+      category: category.trim(),
+      icon: icon.trim(),
+      createdBy: 'self',
+    );
+
+    final updatedAll = List<Nudge>.from(state.allNudges)..add(newNudge);
+    final updatedMy = Set<String>.from(state.myNudgeIds)..add(newId);
+    final updatedSchedules = Map<String, NudgeScheduleSimple>.from(state.schedules)
+      ..[newId] = schedule;
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      myNudgeIds: updatedMy,
+      schedules: updatedSchedules,
+    ));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // NEW: Group Nudge Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Create a new group nudge
+  void createGroupNudge({
+    required String title,
+    required String description,
+    required String category,
+    required String icon,
+    required String groupName,
+    required GroupType groupType,
+    required List<String> participants,
+    required NudgeScheduleSimple schedule,
+    DateTime? dueDate,
+  }) {
+    final newId = _generateId();
+    final groupId = _generateId();
+
+    final newNudge = NudgeFactory.createGroup(
+      id: newId,
+      title: title.trim(),
+      description: description.trim(),
+      category: category.trim(),
+      icon: icon.trim(),
+      groupId: groupId,
+      groupName: groupName.trim(),
+      groupType: groupType,
+      createdBy: 'self',
+      participants: ['self', ...participants],
+      dueDate: dueDate,
+    );
+
+    final updatedAll = List<Nudge>.from(state.allNudges)..add(newNudge);
+    final updatedSchedules = Map<String, NudgeScheduleSimple>.from(state.schedules)
+      ..[newId] = schedule;
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      schedules: updatedSchedules,
+    ));
+  }
+
+  /// Join an existing group nudge
+  void joinGroupNudge(String nudgeId) {
+    final nudge = state.allNudges.firstWhere(
+      (n) => n.id == nudgeId,
+      orElse: () => throw StateError('Group nudge not found: $nudgeId'),
+    );
+
+    if (!nudge.isGroup) return;
+    if (nudge.participants.contains('self')) return;
+
+    // Update nudge to include user in participants
+    final updatedNudge = nudge.copyWith(
+      participants: [...nudge.participants, 'self'],
+    );
+
+    final updatedAll = state.allNudges.map((n) => 
+      n.id == nudgeId ? updatedNudge : n
+    ).toList();
+
+    emit(state.copyWith(allNudges: updatedAll));
+  }
+
+  /// Leave a group nudge
+  void leaveGroupNudge(String nudgeId) {
+    final nudge = state.allNudges.firstWhere(
+      (n) => n.id == nudgeId,
+      orElse: () => throw StateError('Group nudge not found: $nudgeId'),
+    );
+
+    if (!nudge.isGroup) return;
+    if (!nudge.participants.contains('self')) return;
+
+    // Update nudge to remove user from participants
+    final updatedParticipants = nudge.participants.where((p) => p != 'self').toList();
+    final updatedNudge = nudge.copyWith(participants: updatedParticipants);
+
+    final updatedAll = state.allNudges.map((n) => 
+      n.id == nudgeId ? updatedNudge : n
+    ).toList();
+
+    // Also remove from myNudges if present
+    final updatedMy = Set<String>.from(state.myNudgeIds)..remove(nudgeId);
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      myNudgeIds: updatedMy,
+    ));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // NEW: Friend Nudge Management
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// Create a friend nudge (accountability with a friend)
+  void createFriendNudge({
+    required String title,
+    required String description,
+    required String category,
+    required String icon,
+    required String friendId,
+    required String friendName,
+    required NudgeScheduleSimple schedule,
+  }) {
+    final newId = _generateId();
+
+    final newNudge = NudgeFactory.createFriend(
+      id: newId,
+      title: title.trim(),
+      description: description.trim(),
+      category: category.trim(),
+      icon: icon.trim(),
+      friendId: friendId,
+      friendName: friendName.trim(),
+      createdBy: 'self',
+      streak: 0,
+    );
+
+    final updatedAll = List<Nudge>.from(state.allNudges)..add(newNudge);
+    final updatedSchedules = Map<String, NudgeScheduleSimple>.from(state.schedules)
+      ..[newId] = schedule;
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      schedules: updatedSchedules,
+    ));
+  }
+
+  /// Accept a friend nudge invitation
+  void acceptFriendNudge(String nudgeId) {
+    final nudge = state.allNudges.firstWhere(
+      (n) => n.id == nudgeId,
+      orElse: () => throw StateError('Friend nudge not found: $nudgeId'),
+    );
+
+    if (!nudge.isFriend) return;
+
+    // Update status to active and add to myNudges
+    final updatedNudge = nudge.copyWith(status: NudgeStatus.active);
+    
+    final updatedAll = state.allNudges.map((n) => 
+      n.id == nudgeId ? updatedNudge : n
+    ).toList();
+
+    final updatedMy = Set<String>.from(state.myNudgeIds)..add(nudgeId);
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      myNudgeIds: updatedMy,
+    ));
+  }
+
+  /// End a friend nudge
+  void endFriendNudge(String nudgeId) {
+    final nudge = state.allNudges.firstWhere(
+      (n) => n.id == nudgeId,
+      orElse: () => throw StateError('Friend nudge not found: $nudgeId'),
+    );
+
+    if (!nudge.isFriend) return;
+
+    // Update status to completed
+    final updatedNudge = nudge.copyWith(status: NudgeStatus.completed);
+    
+    final updatedAll = state.allNudges.map((n) => 
+      n.id == nudgeId ? updatedNudge : n
+    ).toList();
+
+    // Remove from myNudges
+    final updatedMy = Set<String>.from(state.myNudgeIds)..remove(nudgeId);
+
+    emit(state.copyWith(
+      allNudges: updatedAll,
+      myNudgeIds: updatedMy,
+    ));
+  }
+
+  /// Update friend nudge streak
+  void updateFriendStreak(String nudgeId, int newStreak) {
+    final nudge = state.allNudges.firstWhere(
+      (n) => n.id == nudgeId,
+      orElse: () => throw StateError('Friend nudge not found: $nudgeId'),
+    );
+
+    if (!nudge.isFriend) return;
+
+    final updatedNudge = nudge.copyWith(streak: newStreak);
+    
+    final updatedAll = state.allNudges.map((n) => 
+      n.id == nudgeId ? updatedNudge : n
+    ).toList();
+
+    emit(state.copyWith(allNudges: updatedAll));
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Completion (binary) – legacy toggle for "done today"
   // ─────────────────────────────────────────────────────────────────────────────
 
   /// Toggle "done today" (used by older UI; Action Hub now prefers logNow/undoLog).
@@ -253,12 +551,11 @@ class NudgesCubit extends Cubit<NudgesState> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Create customized nudge from a premade template (Customize → Add flow)
+  // Create customized nudge from a premade template (UPDATED)
   // ─────────────────────────────────────────────────────────────────────────────
 
   /// Create a user-owned copy from a premade template with edits,
   /// add it to allNudges + myNudgeIds, and assign its schedule.
-  /// (No external deps; id uses a high-entropy timestamp.)
   void addCustomFromTemplate(
     Nudge template, {
     required String title,
@@ -269,22 +566,19 @@ class NudgesCubit extends Cubit<NudgesState> {
   }) {
     final String newId = _generateId();
 
-    final newNudge = Nudge(
+    final newNudge = NudgeFactory.createPersonal(
       id: newId,
       title: title.trim().isEmpty ? template.title : title.trim(),
-      description:
-          description.trim().isEmpty ? template.description : description.trim(),
+      description: description.trim().isEmpty ? template.description : description.trim(),
       category: category.trim().isEmpty ? template.category : category.trim(),
       icon: icon.trim().isEmpty ? template.icon : icon.trim(),
-      isActive: true,
-      createdAt: DateTime.now(),
+      createdBy: 'self',
     );
 
     final updatedAll = List<Nudge>.from(state.allNudges)..add(newNudge);
     final updatedMy = Set<String>.from(state.myNudgeIds)..add(newId);
-    final updatedSchedules =
-        Map<String, NudgeScheduleSimple>.from(state.schedules)
-          ..[newId] = schedule;
+    final updatedSchedules = Map<String, NudgeScheduleSimple>.from(state.schedules)
+      ..[newId] = schedule;
 
     emit(state.copyWith(
       allNudges: updatedAll,

@@ -174,7 +174,7 @@ class _WelcomePane extends StatelessWidget {
                   child: Icon(Icons.auto_awesome_rounded, size: 36, color: AppTheme.textDark),
                 ),
                 const SizedBox(height: 12),
-                const Text('nudge', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
+                const Text('Nudge', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 28),
 
                 // Big prompt card

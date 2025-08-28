@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nudge/presentation/screens/chat/chat_screen.dart';
+import 'package:nudge/presentation/screens/nudges/premade_nudges_screen.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../business_logic/cubits/nudges_cubit.dart';
@@ -23,7 +25,77 @@ class _PersonalNudgesScreenState extends State<PersonalNudgesScreen> {
     _searchController.dispose();
     super.dispose();
   }
-
+void _showAddNudgeOptions(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Add New Nudge',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.psychology_outlined,
+                color: AppTheme.primaryPurple,
+              ),
+            ),
+            title: const Text('Nudge AI'),
+            subtitle: const Text('Get personalized suggestions from AI'),
+            onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ChatScreen(),
+                      ),
+                    ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.library_books_outlined,
+                color: Colors.blue,
+              ),
+            ),
+            title: const Text('Browse Premade'),
+            subtitle: const Text('Choose from our curated collection'),
+            onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PremadeNudgesScreen(),
+                      ),
+                    ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -35,9 +107,7 @@ class _PersonalNudgesScreenState extends State<PersonalNudgesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // Navigate to add nudge screen
-            },
+            onPressed: () => _showAddNudgeOptions(context),
           ),
         ],
       ),

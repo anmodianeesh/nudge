@@ -1,55 +1,103 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  // Colors
-  static const Color primaryPurple = Color(0xFF8B5CF6);
-  static const Color primaryBlue = Color(0xFF3B82F6);
-  static const Color backgroundGray = Color(0xFFF9FAFB);
-  static const Color cardWhite = Color(0xFFFFFFFF);
-  static const Color textDark = Color(0xFF1F2937);
-  static const Color textGray = Color(0xFF6B7280);
-  static const Color textLight = Color(0xFF9CA3AF);
-  static const Color borderGray = Color(0xFFE5E7EB);
+  // BRAND
+  static const brand = Color(0xFF5B7CFA);
+  static const brandOn = Colors.white;
+  
+  // Additional color aliases
+  static const primaryPurple = brand;
+  static const primaryBlue = brand;
+  
+  // SURFACES
+  static const background = Color(0xFFF6F7F9);
+  static const surface = Colors.white;
+  static const border = Color(0xFFE6E8EC);
+  
+  // Aliases for new screens
+  static const backgroundGray = background;
+  static const cardWhite = surface;
+  static const borderGray = border;
 
-  // Gradients
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primaryPurple, primaryBlue],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // TEXT
+  static const textPrimary = Color(0xFF0F172A);
+  static const textSecondary = Color(0xFF64748B);
+  static const textMuted = Color(0xFF94A3B8);
+  
+  // Text aliases
+  static const textDark = textPrimary;
+  static const textGray = textSecondary;
+  static const textLight = Colors.white;
 
-  static const LinearGradient backgroundGradient = LinearGradient(
-    colors: [Color(0xFFF8FAFF), Color(0xFFF0F4FF)],
+  // GRADIENTS (as static getters, not const)
+  static LinearGradient get backgroundGradient => const LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
+    colors: [background, Color(0xFFEDF2F7)],
+  );
+  
+  static LinearGradient get primaryGradient => const LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [brand, Color(0xFF4C6EF5)],
   );
 
-  static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryPurple,
-        brightness: Brightness.light,
+  // RADII
+  static const rLg = 20.0;
+  static const rMd = 16.0;
+
+  // Main theme - renamed from 'theme' to 'lightTheme'
+  static ThemeData get lightTheme => ThemeData(
+    useMaterial3: true,
+    colorScheme: ColorScheme.fromSeed(seedColor: brand).copyWith(
+      background: background,
+      surface: surface,
+      outline: border,
+    ),
+    scaffoldBackgroundColor: background,
+    appBarTheme: const AppBarTheme(
+      backgroundColor: surface,
+      elevation: 0,
+      centerTitle: false,
+      titleTextStyle: TextStyle(
+        fontSize: 18, fontWeight: FontWeight.w600, color: textPrimary),
+      iconTheme: IconThemeData(color: textSecondary),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(rLg),
+        borderSide: const BorderSide(color: border),
       ),
-      textTheme: GoogleFonts.interTextTheme(),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: cardWhite,
-        foregroundColor: textDark,
-        elevation: 0,
-        centerTitle: false,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(rLg),
+        borderSide: const BorderSide(color: border),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryPurple,
-          foregroundColor: cardWhite,
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(rLg),
+        borderSide: const BorderSide(color: brand),
+      ),
+      hintStyle: const TextStyle(color: textMuted),
+    ),
+    textTheme: const TextTheme(
+      titleLarge: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: textPrimary),
+      bodyMedium: TextStyle(fontSize: 16, height: 1.4, color: textPrimary),
+      labelMedium: TextStyle(color: textSecondary),
+    ),
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: brand,
+        foregroundColor: brandOn,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(rMd),
         ),
       ),
-    );
-  }
+    ),
+  );
+  
+  // Keep the old 'theme' getter for backward compatibility
+  static ThemeData get theme => lightTheme;
 }

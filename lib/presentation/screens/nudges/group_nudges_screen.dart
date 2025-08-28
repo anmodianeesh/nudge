@@ -32,7 +32,94 @@ class _GroupNudgesScreenState extends State<GroupNudgesScreen> {
       'dueDate': '9:00 AM',
     },
   ];
-
+void _showGroupNudgeOptions(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) => Container(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Group Nudge Options',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 20),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.psychology_outlined,
+                color: AppTheme.primaryPurple,
+              ),
+            ),
+            title: const Text('Create with AI'),
+            subtitle: const Text('AI-powered group challenges'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to AI chat for group nudges
+            },
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.add_circle_outline,
+                color: Colors.green,
+              ),
+            ),
+            title: const Text('Create Group Challenge'),
+            subtitle: const Text('Start a new group nudge'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to create group nudge screen
+            },
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.group_add_outlined,
+                color: Colors.orange,
+              ),
+            ),
+            title: const Text('Join Existing'),
+            subtitle: const Text('Join a group challenge'),
+            onTap: () {
+              Navigator.pop(context);
+              // Navigate to join group screen
+            },
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final filteredNudges = _groupNudges.where((nudge) {
@@ -50,9 +137,7 @@ class _GroupNudgesScreenState extends State<GroupNudgesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              // Navigate to create group nudge
-            },
+            onPressed: () => _showGroupNudgeOptions(context),
           ),
         ],
       ),

@@ -11,6 +11,7 @@ class PremadeNudgesData {
       icon: 'water_drop',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'hw2',
@@ -20,6 +21,7 @@ class PremadeNudgesData {
       icon: 'medication',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'hw3',
@@ -29,6 +31,7 @@ class PremadeNudgesData {
       icon: 'accessibility_new',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'hw4',
@@ -38,6 +41,7 @@ class PremadeNudgesData {
       icon: 'restaurant',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'hw5',
@@ -47,6 +51,7 @@ class PremadeNudgesData {
       icon: 'self_improvement',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     
     // Productivity
@@ -58,6 +63,7 @@ class PremadeNudgesData {
       icon: 'pause_circle',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'pr2',
@@ -67,6 +73,7 @@ class PremadeNudgesData {
       icon: 'event',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'pr3',
@@ -76,6 +83,7 @@ class PremadeNudgesData {
       icon: 'cleaning_services',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'pr4',
@@ -85,6 +93,7 @@ class PremadeNudgesData {
       icon: 'flag',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     
     // Mindfulness
@@ -96,6 +105,7 @@ class PremadeNudgesData {
       icon: 'air',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'mf2',
@@ -105,6 +115,7 @@ class PremadeNudgesData {
       icon: 'favorite',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'mf3',
@@ -114,6 +125,7 @@ class PremadeNudgesData {
       icon: 'restaurant',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'mf4',
@@ -123,6 +135,7 @@ class PremadeNudgesData {
       icon: 'nature',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     
     // Digital Wellness
@@ -134,6 +147,7 @@ class PremadeNudgesData {
       icon: 'phone_android',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'dw2',
@@ -143,6 +157,7 @@ class PremadeNudgesData {
       icon: 'notifications_off',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'dw3',
@@ -152,6 +167,7 @@ class PremadeNudgesData {
       icon: 'bedtime',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'dw4',
@@ -161,6 +177,7 @@ class PremadeNudgesData {
       icon: 'phone_iphone',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     
     // Social & Relationships
@@ -172,6 +189,7 @@ class PremadeNudgesData {
       icon: 'call',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'sr2',
@@ -181,6 +199,7 @@ class PremadeNudgesData {
       icon: 'thumb_up',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'sr3',
@@ -190,6 +209,7 @@ class PremadeNudgesData {
       icon: 'hearing',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
     Nudge(
       id: 'sr4',
@@ -199,6 +219,7 @@ class PremadeNudgesData {
       icon: 'mail',
       isActive: false,
       createdAt: DateTime.now(),
+      createdBy: 'system',
     ),
   ];
 
