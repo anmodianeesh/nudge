@@ -33,18 +33,17 @@ dependencies:
 
   cupertino_icons: ^1.0.8
 
-  dio: ^5.4.0
+  dio: ^5.6.0
   # State Management
   flutter_bloc: ^8.1.3
 
   equatable: ^2.0.5
   
   # Network & Backend
-  supabase_flutter: ^2.0.0
   http: ^1.1.0
   
   # Local Storage
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.5.2
 
   
   # Notifications
@@ -59,11 +58,19 @@ dependencies:
   uuid: ^4.5.1
   flutter_riverpod: ^2.6.1
   fl_chart: ^1.0.0
+  drift: ^2.28.1
+  drift_sqflite: ^2.0.1
+  path: ^1.9.1
+  timezone: ^0.9.4
+  freezed_annotation: ^3.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  build_runner: ^2.7.0
+  drift_dev: ^2.28.1
+  freezed: ^3.2.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

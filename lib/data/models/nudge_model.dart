@@ -10,7 +10,9 @@ class Nudge {
   final String category;
   final String icon;
   final bool isActive;
+  final bool isAIGenerated;
   final DateTime createdAt;
+  
   
   // New fields for categorization
   final NudgeType type;
@@ -34,6 +36,7 @@ class Nudge {
     required this.isActive,
     required this.createdAt,
     this.type = NudgeType.personal,
+    this.isAIGenerated = false,
     this.groupId,
     this.groupName,
     this.groupType,
@@ -124,12 +127,14 @@ class Nudge {
       'status': status.name,
       'streak': streak,
       'dueDate': dueDate?.toIso8601String(),
+      'is_ai_generated': isAIGenerated,
     };
   }
 
   factory Nudge.fromJson(Map<String, dynamic> json) {
     return Nudge(
       id: json['id'],
+      isAIGenerated: json['is_ai_generated'] ?? false,
       title: json['title'],
       description: json['description'],
       category: json['category'],

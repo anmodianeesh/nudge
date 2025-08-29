@@ -1,10 +1,9 @@
-// lib/data/repos/nudges_repo.dart
 import 'package:dio/dio.dart';
 import '../models/nudge_spec.dart';
 import '../network/api_client.dart';
 
 abstract class NudgesRepo {
-  Future<void> createFromSpec(NudgeSpec spec);
+  Future<String> createFromSpec(NudgeSpec spec); // returns new id
 }
 
 class NudgesRepoHttp implements NudgesRepo {
@@ -12,11 +11,23 @@ class NudgesRepoHttp implements NudgesRepo {
   NudgesRepoHttp(this._api);
 
   @override
-  Future<void> createFromSpec(NudgeSpec spec) async {
-    try {
-      await _api.dio.post('/nudges.create', data: spec.toJson());
-    } on DioException catch (e) {
-      throw e.error ?? 'Failed to create nudge';
-    }
-  }
+Future<String> createFromSpec(NudgeSpec spec) async {
+  // Simulate latency
+  await Future.delayed(const Duration(milliseconds: 150));
+
+  // Generate a fake ID (or persist locally and return the real one)
+  final id = DateTime.now().millisecondsSinceEpoch.toString();
+
+  // OPTIONAL: if you have local storage wired, persist the spec here.
+  // e.g.:
+  // await SimpleNudgesStorage.addNudgeWithCategoryReturningId(
+  //   spec,
+  //   NudgeCategory.personal,
+  // );
+
+  return id;
 }
+
+  }
+
+

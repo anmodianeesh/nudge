@@ -1,5 +1,9 @@
 // lib/business_logic/cubits/nudges_cubit.dart
 import 'package:flutter_bloc/flutter_bloc.dart';
+// Add these imports at the top
+import '../../data/storage/simple_nudges_storage.dart';
+import '../../data/models/simple_nudge.dart';
+import 'package:nudge/data/models/nudge_spec.dart';
 
 import 'package:nudge/business_logic/states/nudges_state.dart';
 import 'package:nudge/data/models/nudge_model.dart';
@@ -7,7 +11,7 @@ import 'package:nudge/data/premade_nudges_data.dart';
 
 class NudgesCubit extends Cubit<NudgesState> {
   NudgesCubit() : super(const NudgesState());
-
+bool _mocksAdded = false;
   // ─────────────────────────────────────────────────────────────────────────────
   // Initialization
   // ─────────────────────────────────────────────────────────────────────────────
@@ -30,70 +34,130 @@ class NudgesCubit extends Cubit<NudgesState> {
       error: null,
     ));
   }
+  /// Load both premade nudges and AI-generated nudges
+  Future<void> loadWithAINudges() async {
+    try {
+      // Start with existing loadInitial logic
+      final all = List<Nudge>.from(PremadeNudgesData.allNudges);
 
-  /// Add mock group and friend nudges for demonstration
-  void _addMockGroupAndFriendNudges(List<Nudge> allNudges, Map<String, NudgeScheduleSimple> schedules) {
-    // Mock group nudges
-    final groupNudge1 = NudgeFactory.createGroup(
-      id: 'group_school_1',
-      title: 'Submit Assignment',
-      description: 'Complete and submit weekly assignment',
-      category: 'Academic',
-      icon: '📚',
-      groupId: 'school_group_1',
-      groupName: 'School',
-      groupType: GroupType.school,
-      createdBy: 'teacher_123',
-      participants: ['self', 'student_1', 'student_2', 'student_3'],
-      dueDate: DateTime.now().add(Duration(days: 1)),
-    );
+      final Map<String, NudgeScheduleSimple> scheds = {};
+      for (final n in all) {
+        scheds[n.id] = _defaultScheduleFor(n);
+      }
 
-    final groupNudge2 = NudgeFactory.createGroup(
-      id: 'group_work_1',
-      title: 'Team Stand-up',
-      description: 'Attend daily team meeting',
-      category: 'Work',
-      icon: '💼',
-      groupId: 'work_team_1',
-      groupName: 'Work',
-      groupType: GroupType.work,
-      createdBy: 'manager_456',
-      participants: ['self', 'colleague_1', 'colleague_2'],
-    );
+      // Add mock group and friend nudges
+      _addMockGroupAndFriendNudges(all, scheds);
 
-    // Mock friend nudges
-    final friendNudge1 = NudgeFactory.createFriend(
-      id: 'friend_john_1',
-      title: 'Morning Run',
-      description: 'Run 3 miles together',
-      category: 'Fitness',
-      icon: '🏃‍♂️',
-      friendId: 'john_123',
-      friendName: 'John',
-      createdBy: 'self',
-      streak: 5,
-    );
+      // Load AI nudges and convert them to complex Nudge objects
+      final aiNudges = await SimpleNudgesStorage.getAllNudges();
+      final convertedAINudges = aiNudges.map((simple) => 
+        SimpleNudgesStorage.convertToComplexNudge(simple, 'current_user')
+      ).toList();
 
-    final friendNudge2 = NudgeFactory.createFriend(
-      id: 'friend_oliver_1',
-      title: 'Read Daily',
-      description: 'Read for 30 minutes',
-      category: 'Learning',
-      icon: '📖',
-      friendId: 'oliver_456',
-      friendName: 'Oliver',
-      createdBy: 'self',
-      streak: 12,
-    );
+      // Add AI nudges to the main list
+      all.addAll(convertedAINudges);
 
-    allNudges.addAll([groupNudge1, groupNudge2, friendNudge1, friendNudge2]);
-    
-    // Add schedules for mock nudges
-    schedules[groupNudge1.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
-    schedules[groupNudge2.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
-    schedules[friendNudge1.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
-    schedules[friendNudge2.id] = const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+      // Add schedules for AI nudges
+      for (final aiNudge in convertedAINudges) {
+        scheds[aiNudge.id] = _defaultScheduleFor(aiNudge);
+      }
+
+      emit(state.copyWith(
+        allNudges: all,
+        schedules: scheds,
+        error: null,
+      ));
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
   }
+  /// Add mock group and friend nudges for demonstration
+void _addMockGroupAndFriendNudges(
+  List<Nudge> allNudges,
+  Map<String, NudgeScheduleSimple> schedules,
+) {
+  // If we've already added mocks in this app run, skip.
+  if (_mocksAdded) return;
+
+  // If any of the mock IDs already exist, assume they were added previously.
+  const mockIds = {
+    'group_school_1',
+    'group_work_1',
+    'friend_john_1',
+    'friend_oliver_1',
+  };
+  final alreadyPresent = allNudges.any((n) => mockIds.contains(n.id));
+  if (alreadyPresent) {
+    _mocksAdded = true;
+    return;
+  }
+
+  // --- your existing mock data (unchanged) ---
+  final groupNudge1 = NudgeFactory.createGroup(
+    id: 'group_school_1',
+    title: 'Submit Assignment',
+    description: 'Complete and submit weekly assignment',
+    category: 'Academic',
+    icon: '📚',
+    groupId: 'school_group_1',
+    groupName: 'School',
+    groupType: GroupType.school,
+    createdBy: 'teacher_123',
+    participants: ['self', 'student_1', 'student_2', 'student_3'],
+    dueDate: DateTime.now().add(const Duration(days: 1)),
+  );
+
+  final groupNudge2 = NudgeFactory.createGroup(
+    id: 'group_work_1',
+    title: 'Team Stand-up',
+    description: 'Attend daily team meeting',
+    category: 'Work',
+    icon: '💼',
+    groupId: 'work_team_1',
+    groupName: 'Work',
+    groupType: GroupType.work,
+    createdBy: 'manager_456',
+    participants: ['self', 'colleague_1', 'colleague_2'],
+  );
+
+  final friendNudge1 = NudgeFactory.createFriend(
+    id: 'friend_john_1',
+    title: 'Morning Run',
+    description: 'Run 3 miles together',
+    category: 'Fitness',
+    icon: '🏃‍♂️',
+    friendId: 'john_123',
+    friendName: 'John',
+    createdBy: 'self',
+    streak: 5,
+  );
+
+  final friendNudge2 = NudgeFactory.createFriend(
+    id: 'friend_oliver_1',
+    title: 'Read Daily',
+    description: 'Read for 30 minutes',
+    category: 'Learning',
+    icon: '📖',
+    friendId: 'oliver_456',
+    friendName: 'Oliver',
+    createdBy: 'self',
+    streak: 12,
+  );
+
+  allNudges.addAll([groupNudge1, groupNudge2, friendNudge1, friendNudge2]);
+
+  schedules[groupNudge1.id] =
+      const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+  schedules[groupNudge2.id] =
+      const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+  schedules[friendNudge1.id] =
+      const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+  schedules[friendNudge2.id] =
+      const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
+
+  // Mark as added so subsequent loads don’t duplicate them.
+  _mocksAdded = true;
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // My Nudges – add / remove / pause / snooze (UPDATED)
@@ -586,6 +650,30 @@ class NudgesCubit extends Cubit<NudgesState> {
       schedules: updatedSchedules,
     ));
   }
+/// Add a personal nudge to state using an existing id + NudgeSpec.
+/// This makes it appear under "My Nudges" instantly with a default schedule.
+void addPersonalFromSpec(String id, NudgeSpec spec) {
+  final newNudge = NudgeFactory.createPersonal(
+    id: id,
+    title: spec.title,
+    description: spec.microStep,
+    // Keep categories free-form; Personal screen uses NudgeType anyway.
+    category: 'Personal',
+    icon: '⭐️',
+    createdBy: 'self',
+  );
+
+  final updatedAll = List<Nudge>.from(state.allNudges)..add(newNudge);
+  final updatedMy = Set<String>.from(state.myNudgeIds)..add(id);
+  final updatedSchedules = Map<String, NudgeScheduleSimple>.from(state.schedules)
+    ..[id] = _defaultScheduleFor(newNudge);
+
+  emit(state.copyWith(
+    allNudges: updatedAll,
+    myNudgeIds: updatedMy,
+    schedules: updatedSchedules,
+  ));
+}
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Helpers

@@ -17,7 +17,7 @@ class NudgeApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => NudgesCubit()..loadInitial(),
+      create: (_) => NudgesCubit()..loadWithAINudges(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Nudge',

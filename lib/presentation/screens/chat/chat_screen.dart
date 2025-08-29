@@ -1,3 +1,4 @@
+// lib/presentation/screens/chat/chat_screen.dart
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
@@ -5,9 +6,17 @@ import '../../../data/repos/ai_repo.dart';
 import '../../../data/repos/nudges_repo.dart';
 import '../../../data/network/api_client.dart';
 import '../../../data/models/nudge_spec.dart';
+import '../../../data/models/simple_nudge.dart';
+import '../../../data/storage/simple_nudges_storage.dart';
 import '../../widgets/confirm_nudge_sheet.dart';
 import 'chat_history_screen.dart';
-//import '../../../data/storage/nudges_storage.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../business_logic/cubits/nudges_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../business_logic/cubits/nudges_cubit.dart';
+import '../../../core/settings/user_settings.dart';
+
+
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -56,7 +65,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       // Check if user wants to create a nudge
       if (_shouldCreateNudge(trimmed)) {
-        await _handleNudgeCreation(trimmed);
+        await _maybeCreateNudgeFromText(trimmed);
       } else {
         // Regular chat response
         await Future.delayed(const Duration(milliseconds: 600));
@@ -78,7 +87,12 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } finally {
       setState(() => _isTyping = false);
-      ChatArchive.autosaveFromMessages(_messages);
+      // Wherever this is in _send(...)
+ChatArchive.autosaveFromMessages(_messages);
+
+// ⬇️ Add this line right below the autosave
+await _maybeCreateNudgeFromText(trimmed);
+
       _scrollToBottom();
     }
   }
@@ -92,60 +106,95 @@ class _ChatScreenState extends State<ChatScreen> {
            lower.contains('routine') ||
            lower.contains('water') ||
            lower.contains('sleep') ||
-           lower.contains('exercise');
+           lower.contains('exercise') ||
+           lower.contains('study') ||
+           lower.contains('family') ||
+           lower.contains('friend') ||
+           lower.contains('work');
   }
 
-  Future<void> _handleNudgeCreation(String userText) async {
-    try {
-      // Add AI response suggesting the nudge
-      setState(() {
-        _messages.add(ChatMessage(
-          role: MessageRole.assistant,
-          text: "I can help you with that! Let me create a nudge for you.",
-          time: DateTime.now(),
-        ));
-      });
+// Creates a nudge from the user text via AI, shows confirm, saves to server,
+// then refreshes the UI state so it appears in Personal/My screens instantly.
+Future<void> _maybeCreateNudgeFromText(String text) async {
+  bool shouldCreate = false;
 
-      // Call AI to generate nudge spec
-      final spec = await _aiRepo.suggestFromChat(userText, 'Europe/Madrid');
-      
-      if (!mounted) return;
+  try {
+    if (text.trim().isEmpty) return;
 
-      // Show confirmation sheet
-      final confirmed = await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => ConfirmNudgeSheet(
-          spec: spec,
-          onConfirm: _createNudge,
-        ),
-      );
-
-      if (confirmed == true && mounted) {
-        setState(() {
-          _messages.add(ChatMessage(
-            role: MessageRole.assistant,
-            text: "Perfect! Your nudge has been created and scheduled. I'll remind you at the right time.",
-            time: DateTime.now(),
-          ));
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _messages.add(ChatMessage(
-            role: MessageRole.assistant,
-            text: "I had trouble creating that nudge. Could you try describing it differently?",
-            time: DateTime.now(),
-          ));
-        });
-      }
+    // If you already have a heuristic function, prefer it.
+    if (mounted && (this as dynamic)._shouldCreateNudge != null) {
+      final f = (this as dynamic)._shouldCreateNudge as bool Function(String);
+      shouldCreate = f(text);
+    } else {
+      // Simple fallback heuristic
+      final lower = text.toLowerCase();
+      shouldCreate = lower.contains('remind me') ||
+                     lower.contains('create nudge') ||
+                     lower.contains('habit') ||
+                     lower.contains('routine');
     }
+  } catch (_) {
+    // never block
   }
 
-  Future<void> _createNudge(NudgeSpec spec) async {
-    await _nudgesRepo.createFromSpec(spec);
+  if (!shouldCreate) return;
+
+final tz = await UserSettings.getTimezone();
+
+  try {
+    // 1) Ask backend AI to turn text into a NudgeSpec
+    final spec = await _aiRepo.suggestFromChat(text, tz);
+    if (!mounted) return;
+
+    // 2) Confirm with the user
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ConfirmNudgeSheet(
+        spec: spec,
+        onConfirm: (s) => _nudgesRepo.createFromSpec(s), // server save
+      ),
+    );
+
+    // 3) If saved, refresh in-app state so it shows up immediately
+    if (ok == true && mounted) {
+      context.read<NudgesCubit>().loadWithAINudges();
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text('Nudge saved'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 1200),
+        ));
+    }
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text('Couldn’t create nudge: $e'),
+        behavior: SnackBarBehavior.floating,
+      ));
   }
+}
+
+Future<void> _createNudge(NudgeSpec spec) async {
+  // 1) Save on server (your existing API)
+  await _nudgesRepo.createFromSpec(spec);
+
+  // 2) Persist locally and get the id we just created
+  final newId = await SimpleNudgesStorage.addNudgeWithCategoryReturningId(
+    
+    spec,
+    NudgeCategory.personal,
+  );
+
+  // 3) Reflect in UI state immediately so it appears in Personal/My Nudges
+  if (mounted) {
+    context.read<NudgesCubit>().addPersonalFromSpec(newId, spec);
+  }
+}
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -168,6 +217,12 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (userText.toLowerCase().contains('study')) {
       return "2-minute focus sprint: open the doc, add one bullet. I'll check back.";
+    }
+    if (userText.toLowerCase().contains('family')) {
+      return "Family time is precious. What small step can strengthen those bonds?";
+    }
+    if (userText.toLowerCase().contains('friend')) {
+      return "Friendship needs nurturing. A quick text or call can make someone's day.";
     }
     return "Got it. Let's turn this into a tiny step you can do today.";
   }
@@ -577,6 +632,36 @@ class MockAiRepo implements AiRepo {
         rrule: "FREQ=DAILY;BYHOUR=8;BYMINUTE=0",
         reminderCopy: "Let's get moving! 💪",
       );
+    } else if (userInput.toLowerCase().contains('family')) {
+      return NudgeSpec(
+        title: "Connect with family",
+        microStep: "Send one text to family member",
+        tone: "warm",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=18;BYMINUTE=0",
+        reminderCopy: "Family time! ❤️",
+      );
+    } else if (userInput.toLowerCase().contains('friend')) {
+      return NudgeSpec(
+        title: "Stay connected with friends",
+        microStep: "Send a quick message to a friend",
+        tone: "friendly",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=19;BYMINUTE=0",
+        reminderCopy: "Friendship check-in! 👋",
+      );
+    } else if (userInput.toLowerCase().contains('work')) {
+      return NudgeSpec(
+        title: "Work productivity",
+        microStep: "Review tomorrow's priorities",
+        tone: "professional",
+        channels: const ["push"],
+        tz: tz,
+        rrule: "FREQ=DAILY;BYHOUR=17;BYMINUTE=0",
+        reminderCopy: "Quick planning session 📋",
+      );
     } else {
       return NudgeSpec(
         title: "Daily habit",
@@ -593,15 +678,30 @@ class MockAiRepo implements AiRepo {
 
 class MockNudgesRepo implements NudgesRepo {
   @override
-  Future<void> createFromSpec(NudgeSpec spec) async {
+  Future<String> createFromSpec(NudgeSpec spec) async {
     await Future.delayed(const Duration(milliseconds: 500));
     
-    // Import the storage class at the top of the file
-    // For now, we'll simulate saving
-    print('Mock: Created nudge - ${spec.title}');
+    // Determine category based on content
+    final category = _determineCategory(spec.title + " " + spec.microStep);
     
-    // TODO: Uncomment this when NudgesStorage is available
-    // await NudgesStorage.addNudge(spec);
+    // Save with category and AI flag, and get the new nudge ID
+    final newId = await SimpleNudgesStorage.addNudgeWithCategoryReturningId(spec, category);
+    print('Saved AI nudge: ${spec.title} in ${category.name} category');
+    return newId;
+  }
+  
+  NudgeCategory _determineCategory(String content) {
+    final lower = content.toLowerCase();
+    if (lower.contains('family') || lower.contains('parent') || lower.contains('kid') || lower.contains('mom') || lower.contains('dad')) {
+      return NudgeCategory.family;
+    }
+    if (lower.contains('friend') || lower.contains('social') || lower.contains('together') || lower.contains('connect')) {
+      return NudgeCategory.friends;
+    }
+    if (lower.contains('work') || lower.contains('meeting') || lower.contains('project') || lower.contains('office') || lower.contains('productivity')) {
+      return NudgeCategory.work;
+    }
+    return NudgeCategory.personal;
   }
 }
 
@@ -616,6 +716,7 @@ class ChatSession {
   final String id; final String title; final DateTime updatedAt; final List<ChatMessage> messages;
   ChatSession({required this.id, required this.title, required this.updatedAt, required this.messages});
 }
+
 class ChatArchive {
   static final List<ChatSession> _sessions = [];
   static void saveSessionFromMessages(List<ChatMessage> messages) {
