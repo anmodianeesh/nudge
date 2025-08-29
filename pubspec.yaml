@@ -43,7 +43,7 @@ dependencies:
   http: ^1.1.0
   
   # Local Storage
-  shared_preferences: ^2.5.2
+  shared_preferences: ^2.5.3
 
   
   # Notifications
@@ -63,6 +63,7 @@ dependencies:
   path: ^1.9.1
   timezone: ^0.9.4
   freezed_annotation: ^3.1.0
+  supabase_flutter: ^2.10.0
 
 dev_dependencies:
   flutter_test:

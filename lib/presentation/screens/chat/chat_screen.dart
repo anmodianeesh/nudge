@@ -140,45 +140,51 @@ class _ChatScreenState extends State<ChatScreen> {
       
       if (!mounted) return;
 
-      // Show confirmation sheet
-      final ok = await showModalBottomSheet<bool>(
+      // Show confirmation & editing sheet (returns edited spec or null if cancelled)
+      final edited = await showModalBottomSheet<NudgeSpec>(
         context: context,
         isScrollControlled: true,
         backgroundColor: AppTheme.cardWhite,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        builder: (context) => _ConfirmNudgeSheet(
-          spec: spec,
-          onConfirm: () => _createNudge(spec),
+        builder: (context) => _ConfirmNudgeSheet(spec: spec),
+      );
+
+      if (edited == null) return;
+
+      // 1) Show user's confirmation as a reply message
+      setState(() {
+        _messages.add(ChatMessage(
+          role: MessageRole.user,
+          text: _formatUserConfirmation(edited),
+          time: DateTime.now(),
+        ));
+      });
+
+      // 2) Create the nudge from the edited spec
+      await _createNudge(edited);
+
+      // 3) Show success feedback
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nudge created successfully!'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
 
-      // If confirmed, show success message
-      if (ok == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            
-              content: Text(' Nudge created successfully!'),
-       
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
-            ),
-            
-          );
+      // 4) Add a follow-up AI message
+      setState(() {
+        _messages.add(ChatMessage(
+          role: MessageRole.assistant,
+          text: "Perfect! I've created that nudge for you. You'll find it in your 'My Nudges' section, and it'll start helping you build this habit. Remember, consistency beats perfection!",
+          time: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
 
-
-
-        // Add a follow-up AI message
-        setState(() {
-          _messages.add(ChatMessage(
-            role: MessageRole.assistant,
-            text: "Perfect! I've created that nudge for you. You'll find it in your 'My Nudges' section, and it'll start helping you build this habit. Remember, consistency beats perfection!",
-            time: DateTime.now(),
-          ));
-        });
-        _scrollToBottom();
-      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -191,6 +197,16 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         );
     }
+  }
+
+  String _formatUserConfirmation(NudgeSpec spec) {
+    final scheduleText = spec.scheduleType == 'times_per_day' 
+        ? '${spec.targetCount}x per day' 
+        : spec.scheduleType;
+    
+    return 'Perfect! Create nudge "${spec.title}" (${spec.category}) — $scheduleText.\n\n'
+           'Reminder: ${spec.reminderText}\n'
+           'Action: ${spec.description}';
   }
 
   NudgeSpec _generateNudgeFromText(String text) {
@@ -280,7 +296,8 @@ class _ChatScreenState extends State<ChatScreen> {
       category: spec.category,
       icon: _getCategoryIcon(spec.category),
       isActive: true,
-      createdAt: DateTime.now(), createdBy: '',
+      createdAt: DateTime.now(), 
+      createdBy: '',
     );
 
     // Determine schedule
@@ -410,197 +427,326 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// Confirm nudge bottom sheet
-class _ConfirmNudgeSheet extends StatelessWidget {
+// Enhanced confirm nudge bottom sheet with editing capabilities
+class _ConfirmNudgeSheet extends StatefulWidget {
   final NudgeSpec spec;
-  final VoidCallback onConfirm;
+  const _ConfirmNudgeSheet({required this.spec});
 
-  const _ConfirmNudgeSheet({
-    required this.spec,
-    required this.onConfirm,
-  });
+  @override
+  State<_ConfirmNudgeSheet> createState() => _ConfirmNudgeSheetState();
+}
+
+class _ConfirmNudgeSheetState extends State<_ConfirmNudgeSheet> {
+  late final TextEditingController _title;
+  late final TextEditingController _description;
+  late final TextEditingController _reminder;
+  late int _targetCount;
+  late String _category;
+  late String _scheduleType;
+
+  final _formKey = GlobalKey<FormState>();
+
+  final List<String> _categories = const [
+    'Health', 'Fitness', 'Productivity', 'Personal'
+  ];
+  final List<String> _scheduleOptions = const [
+    'times_per_day', 'daily'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _title = TextEditingController(text: widget.spec.title);
+    _description = TextEditingController(text: widget.spec.description);
+    _reminder = TextEditingController(text: widget.spec.reminderText);
+    _targetCount = widget.spec.targetCount;
+    _category = widget.spec.category;
+    _scheduleType = widget.spec.scheduleType;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    _reminder.dispose();
+    super.dispose();
+  }
+
+  void _confirm() {
+    if (!_formKey.currentState!.validate()) return;
+    final edited = NudgeSpec(
+      title: _title.text.trim(),
+      description: _description.text.trim(),
+      category: _category,
+      targetCount: _targetCount,
+      scheduleType: _scheduleType,
+      reminderText: _reminder.text.trim(),
+    );
+    Navigator.of(context).pop(edited);
+  }
+
+  String _getScheduleDisplayName(String scheduleType) {
+    switch (scheduleType) {
+      case 'times_per_day':
+        return 'Times per day';
+      case 'daily':
+        return 'Daily';
+      default:
+        return scheduleType;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                height: 4,
-                width: 40,
-                decoration: BoxDecoration(
-                  color: AppTheme.borderGray,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Header
-            Row(
+        padding: EdgeInsets.only(left: 20, right: 20, bottom: bottomInset + 20, top: 12),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryPurple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    _getCategoryIcon(spec.category),
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Create this nudge?',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textDark,
-                        ),
-                      ),
-                      Text(
-                        'I\'ll help you build this habit',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppTheme.textGray,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Nudge details
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppTheme.backgroundGray,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    spec.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textDark,
+                // Handle
+                Center(
+                  child: Container(
+                    height: 4,
+                    width: 40,
+                    decoration: BoxDecoration(
+                      color: AppTheme.borderGray,
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    spec.description,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textGray,
-                      height: 1.4,
+                ),
+                const SizedBox(height: 20),
+                
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryPurple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _getCategoryIcon(_category),
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Review & Create Nudge',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textDark,
+                            ),
+                          ),
+                          Text(
+                            'Customize details before creating',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppTheme.textGray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Form fields
+                TextFormField(
+                  controller: _title,
+                  decoration: InputDecoration(
+                    labelText: 'Title',
+                    hintText: 'e.g., Stay Hydrated',
+                    filled: true,
+                    fillColor: AppTheme.backgroundGray,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryPurple.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          spec.category,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primaryPurple,
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a title' : null,
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _description,
+                  maxLines: 2,
+                  decoration: InputDecoration(
+                    labelText: 'Description',
+                    hintText: 'What exactly should happen?',
+                    filled: true,
+                    fillColor: AppTheme.backgroundGray,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a description' : null,
+                ),
+                const SizedBox(height: 16),
+
+                // Category and Schedule Type
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _categories.contains(_category) ? _category : _categories.first,
+                        items: _categories.map((c) => DropdownMenuItem(
+                          value: c, 
+                          child: Row(
+                            children: [
+                              Text(_getCategoryIcon(c), style: const TextStyle(fontSize: 16)),
+                              const SizedBox(width: 8),
+                              Text(c),
+                            ],
+                          )
+                        )).toList(),
+                        onChanged: (v) => setState(() => _category = v ?? _categories.first),
+                        decoration: InputDecoration(
+                          labelText: 'Category',
+                          filled: true,
+                          fillColor: AppTheme.backgroundGray,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _scheduleType,
+                        items: _scheduleOptions.map((s) => DropdownMenuItem(
+                          value: s, 
+                          child: Text(_getScheduleDisplayName(s))
+                        )).toList(),
+                        onChanged: (v) => setState(() => _scheduleType = v ?? _scheduleOptions.first),
+                        decoration: InputDecoration(
+                          labelText: 'Schedule',
+                          filled: true,
+                          fillColor: AppTheme.backgroundGray,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Target count
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundGray,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Target per day',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textDark,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setState(() => _targetCount = (_targetCount > 1) ? _targetCount - 1 : 1),
+                        icon: const Icon(Icons.remove_circle_outline),
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppTheme.primaryPurple,
+                        ),
+                      ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: AppTheme.cardWhite,
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          '${spec.targetCount}x per day',
+                          '$_targetCount',
                           style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textGray,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textDark,
                           ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setState(() => _targetCount += 1),
+                        icon: const Icon(Icons.add_circle_outline),
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppTheme.primaryPurple,
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Actions
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Maybe Later'),
-                  ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      onConfirm();
-                      Navigator.of(context).pop(true);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.primaryPurple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 16),
+                
+                const SizedBox(height: 24),
+                
+                // Actions
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
                       ),
                     ),
-                    child: const Text(
-                      'Create Nudge',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed: _confirm,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Create Nudge',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
