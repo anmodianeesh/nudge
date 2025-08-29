@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../data/storage/daily_completion_store.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../business_logic/cubits/nudges_cubit.dart';
@@ -314,28 +316,58 @@ class _ActionHub extends StatefulWidget {
   State<_ActionHub> createState() => _ActionHubState();
 }
 
-class _ActionHubState extends State<_ActionHub> {
+// Updated _ActionHub in lib/presentation/screens/home/home_screen.dart
+// Add this to your existing home_screen.dart file, replacing the existing _ActionHub classes
+
+class _ActionHubState extends State<_ActionHub> with WidgetsBindingObserver {
   late final PageController _controller;
   int _index = 0;
+
+  // Persisted: ids completed today (survives app restarts; resets tomorrow)
+  Set<String> _completedToday = <String>{};
+
+  // For the quick “completed” animation before we hide
+  final Set<String> _justCompletedIds = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _controller = PageController(viewportFraction: 0.94); // subtle peeks
+    WidgetsBinding.instance.addObserver(this);
+    _controller = PageController(viewportFraction: 0.94);
+    _loadCompletedToday();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadCompletedToday() async {
+    final set = await DailyCompletionStore.load();
+    if (!mounted) return;
+    setState(() => _completedToday = set);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When app comes back, the store auto-rolls day; we reload the set.
+    if (state == AppLifecycleState.resumed) {
+      _loadCompletedToday();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final actionable = widget.state.actionableNudges;
 
-    if (actionable.isEmpty) {
-      // Placeholder of SAME height (keeps layout stable)
+    // Hide any nudge that’s completed today
+    final visibleNudges = actionable
+        .where((n) => !_completedToday.contains(n.id))
+        .toList();
+
+    if (visibleNudges.isEmpty) {
       return Container(
         decoration: BoxDecoration(
           color: AppTheme.cardWhite,
@@ -349,7 +381,7 @@ class _ActionHubState extends State<_ActionHub> {
             SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Add a scheduled nudge to start tracking from the Home page',
+                'Add a scheduled nudge to start logging from Home',
                 style: TextStyle(color: AppTheme.textGray),
               ),
             ),
@@ -363,16 +395,17 @@ class _ActionHubState extends State<_ActionHub> {
         Expanded(
           child: PageView.builder(
             controller: _controller,
-            itemCount: actionable.length,
+            itemCount: visibleNudges.length,
             onPageChanged: (i) => setState(() => _index = i),
             padEnds: false,
             itemBuilder: (context, i) {
-              final n = actionable[i];
+              final n = visibleNudges[i];
               final s = widget.state.schedules[n.id]!;
               final count = widget.state.dailyCountFor(n.id, DateTime.now());
               final target = s.dailyTarget;
               final pct = (target == 0) ? 0.0 : (count / target).clamp(0.0, 1.0);
               final done = count >= target;
+              final justCompleted = _justCompletedIds.contains(n.id);
 
               return _ActionCard(
                 title: n.title,
@@ -382,12 +415,56 @@ class _ActionHubState extends State<_ActionHub> {
                 target: target,
                 scheduleKind: s.kind,
                 done: done,
-                onLog: () {
+                justCompleted: justCompleted,
+                onLog: () async {
+                  
+
+                  // 1) Always log the attempt
                   final cubit = context.read<NudgesCubit>();
-                  if (done) {
-                    cubit.undoLog(n.id);
-                  } else {
-                    cubit.logNow(n.id);
+                  cubit.logNow(n.id);
+
+                  // 2) Did this reach the target?
+                  final newCount = count + 1;
+                  if (newCount >= target && !done) {
+                    setState(() => _justCompletedIds.add(n.id));
+
+                    // Congrats toast (NO undo)
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(
+                        SnackBar(
+                          content: Text('🎉 Great job on “${n.title}”!'),
+                          backgroundColor: AppTheme.primaryPurple,
+                          duration: const Duration(seconds: 2),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+
+                    // 3) Briefly show the green check animation, then hide + persist
+                    await Future.delayed(const Duration(milliseconds: 1200));
+
+                    // Persist “completed today” and refresh the set
+                    _completedToday = await DailyCompletionStore.markCompleted(n.id);
+                    if (!mounted) return;
+
+                    setState(() {
+                      _justCompletedIds.remove(n.id);
+                    });
+
+                    // Adjust page if needed
+                    if (_controller.hasClients && visibleNudges.length > 1) {
+                      final newIndex = _index >= visibleNudges.length - 1
+                          ? (_index - 1).clamp(0, visibleNudges.length - 2)
+                          : _index;
+                      _controller.animateToPage(
+                        newIndex,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
                   }
                 },
               );
@@ -395,36 +472,37 @@ class _ActionHubState extends State<_ActionHub> {
           ),
         ),
         const SizedBox(height: 8),
-        // Page dots
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(actionable.length, (i) {
-            final active = i == _index;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              width: active ? 18 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: active ? AppTheme.primaryPurple : AppTheme.borderGray,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            );
-          }),
-        ),
+        if (visibleNudges.length > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(visibleNudges.length, (i) {
+              final active = i == _index;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: active ? 18 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: active ? AppTheme.primaryPurple : AppTheme.borderGray,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              );
+            }),
+          ),
       ],
     );
   }
 }
 
-class _ActionCard extends StatelessWidget {
+class _ActionCard extends StatefulWidget {
   final String title;
   final String category;
-  final double progress; // 0..1
+  final double progress;
   final int count;
   final int target;
   final ScheduleKind scheduleKind;
   final bool done;
+  final bool justCompleted;
   final VoidCallback onLog;
 
   const _ActionCard({
@@ -435,9 +513,63 @@ class _ActionCard extends StatelessWidget {
     required this.target,
     required this.scheduleKind,
     required this.done,
+    required this.justCompleted,
     required this.onLog,
-    super.key,
   });
+
+  @override
+  State<_ActionCard> createState() => _ActionCardState();
+}
+
+class _ActionCardState extends State<_ActionCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<Color?> _colorAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.elasticOut,
+    ));
+
+    _colorAnimation = ColorTween(
+      begin: AppTheme.cardWhite,
+      end: AppTheme.primaryPurple.withOpacity(0.1),
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_ActionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    if (widget.justCompleted && !oldWidget.justCompleted) {
+      _animationController.forward().then((_) {
+        if (mounted) {
+          _animationController.reverse();
+        }
+      });
+    }
+  }
 
   static String _scheduleHint(ScheduleKind kind) {
     switch (kind) {
@@ -454,109 +586,156 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        color: AppTheme.cardWhite,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          // Progress ring + icon
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 56,
-                height: 56,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 6,
-                  backgroundColor: AppTheme.borderGray,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppTheme.primaryPurple,
-                  ),
-                ),
-              ),
-              const Icon(Icons.checklist_rtl, color: AppTheme.primaryPurple),
-            ],
-          ),
-          const SizedBox(width: 12),
-
-          // Texts
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                Text(
-                  category,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppTheme.textGray),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$count / $target today',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textDark,
-                  ),
-                ),
-                Text(
-                  _scheduleHint(scheduleKind),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.textGray,
-                  ),
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Container(
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: _colorAnimation.value ?? AppTheme.cardWhite,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-          ),
-
-          const SizedBox(width: 8),
-
-          // Log / Undo button (fixed sizing; no weird dots)
-          ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 104, minHeight: 40),
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(104, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Progress ring + icon
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 56,
+                      height: 56,
+                      child: CircularProgressIndicator(
+                        value: widget.progress,
+                        strokeWidth: 6,
+                        backgroundColor: AppTheme.borderGray,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          widget.justCompleted 
+                              ? Colors.green 
+                              : AppTheme.primaryPurple,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      widget.justCompleted 
+                          ? Icons.check_circle 
+                          : Icons.checklist_rtl,
+                      color: widget.justCompleted 
+                          ? Colors.green 
+                          : AppTheme.primaryPurple,
+                    ),
+                  ],
                 ),
-                textStyle: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                const SizedBox(width: 12),
+
+                // Texts
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        widget.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: AppTheme.textGray),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.justCompleted 
+                            ? 'Complete!' 
+                            : '${widget.count} / ${widget.target} today',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: widget.justCompleted 
+                              ? Colors.green 
+                              : AppTheme.textDark,
+                        ),
+                      ),
+                      if (!widget.justCompleted)
+                        Text(
+                          _scheduleHint(widget.scheduleKind),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.textGray,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              onPressed: onLog,
-              child: Text(
-                done ? 'Undo' : 'Log now',
-                overflow: TextOverflow.visible,
-                softWrap: false,
-              ),
+
+                const SizedBox(width: 8),
+
+                // Log button (no undo button when completed)
+                if (!widget.justCompleted)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 104, minHeight: 40),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(104, 40),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      ),
+                      onPressed: widget.onLog,
+                      child: const Text('Log now'),
+                    ),
+                  )
+                else
+                  // Show completion indicator instead of button
+                  Container(
+                    width: 104,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.green),
+                    ),
+                    child: const Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check, color: Colors.green, size: 18),
+                          SizedBox(width: 4),
+                          Text(
+                            'Done!',
+                            style: TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

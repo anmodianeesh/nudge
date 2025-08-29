@@ -26,7 +26,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   DateTime? _selectedDate;
   String? _selectedGender;
   String? _primaryGoal;
-  List<String> _selectedChallenges = [];
+  final List<String> _selectedChallenges = [];
   
   final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
   final List<String> _goalOptions = [

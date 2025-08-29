@@ -50,7 +50,6 @@ class AppTheme {
   static ThemeData get lightTheme => ThemeData(
     useMaterial3: true,
     colorScheme: ColorScheme.fromSeed(seedColor: brand).copyWith(
-      background: background,
       surface: surface,
       outline: border,
     ),

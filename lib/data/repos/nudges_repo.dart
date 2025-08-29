@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import '../models/nudge_spec.dart';
 import '../network/api_client.dart';
 

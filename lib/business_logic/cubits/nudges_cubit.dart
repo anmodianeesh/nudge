@@ -2,7 +2,6 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 // Add these imports at the top
 import '../../data/storage/simple_nudges_storage.dart';
-import '../../data/models/simple_nudge.dart';
 import 'package:nudge/data/models/nudge_spec.dart';
 
 import 'package:nudge/business_logic/states/nudges_state.dart';
@@ -17,16 +16,30 @@ bool _mocksAdded = false;
   // ─────────────────────────────────────────────────────────────────────────────
 
   /// Load premade nudges and attach simple default schedules (heuristic).
-  void loadInitial() {
-    final all = List<Nudge>.from(PremadeNudgesData.allNudges);
+  /// Load premade nudges and attach simple default schedules (heuristic).
+void loadInitial() {
+  // Get templates
+final templates = PremadeNudgesData.allNudges;
 
-    final Map<String, NudgeScheduleSimple> scheds = {};
-    for (final n in all) {
-      scheds[n.id] = _defaultScheduleFor(n);
-    }
+// Convert PremadeNudge -> Nudge
+final all = templates.map<Nudge>((p) {
+  return NudgeFactory.createPersonal(
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    category: 'Personal',
+    icon: '⭐️',
+    createdBy: 'system',
+  );
+}).toList();
 
-    // Add some mock group and friend nudges for demo
-    _addMockGroupAndFriendNudges(all, scheds);
+// Default schedules
+final Map<String, NudgeScheduleSimple> scheds = {
+  for (final n in all) n.id: _defaultScheduleFor(n),
+};
+
+// Demo group/friend nudges (unchanged)
+_addMockGroupAndFriendNudges(all, scheds);
 
     emit(state.copyWith(
       allNudges: all,
@@ -48,29 +61,29 @@ bool _mocksAdded = false;
       // Add mock group and friend nudges
       _addMockGroupAndFriendNudges(all, scheds);
 
-      // Load AI nudges and convert them to complex Nudge objects
-      final aiNudges = await SimpleNudgesStorage.getAllNudges();
-      final convertedAINudges = aiNudges.map((simple) => 
-        SimpleNudgesStorage.convertToComplexNudge(simple, 'current_user')
-      ).toList();
+// (keep your AI-nudges section exactly as you have it)
 
-      // Add AI nudges to the main list
-      all.addAll(convertedAINudges);
 
-      // Add schedules for AI nudges
-      for (final aiNudge in convertedAINudges) {
-        scheds[aiNudge.id] = _defaultScheduleFor(aiNudge);
-      }
+    // Load AI nudges (unchanged)
+    final aiNudges = await SimpleNudgesStorage.getAllNudges();
+    final convertedAINudges = aiNudges
+        .map((simple) => SimpleNudgesStorage.convertToComplexNudge(simple, 'current_user'))
+        .toList();
 
-      emit(state.copyWith(
-        allNudges: all,
-        schedules: scheds,
-        error: null,
-      ));
-    } catch (e) {
-      emit(state.copyWith(error: e.toString()));
+    all.addAll(convertedAINudges);
+    for (final ai in convertedAINudges) {
+      scheds[ai.id] = _defaultScheduleFor(ai);
     }
+
+    emit(state.copyWith(
+      allNudges: all,
+      schedules: scheds,
+      error: null,
+    ));
+  } catch (e) {
+    emit(state.copyWith(error: e.toString()));
   }
+}
   /// Add mock group and friend nudges for demonstration
 void _addMockGroupAndFriendNudges(
   List<Nudge> allNudges,

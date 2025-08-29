@@ -84,7 +84,7 @@ class _NudgeEditScreenState extends State<NudgeEditScreen> {
       SnackBar(
         content: Text('Nudge added to $_selectedWho'),
 
-        duration: Duration(milliseconds: 1000),
+        duration: Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
       ),
     );

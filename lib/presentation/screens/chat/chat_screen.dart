@@ -2,21 +2,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../data/repos/ai_repo.dart';
-import '../../../data/repos/nudges_repo.dart';
-import '../../../data/network/api_client.dart';
-import '../../../data/models/nudge_spec.dart';
-import '../../../data/models/simple_nudge.dart';
-import '../../../data/storage/simple_nudges_storage.dart';
-import '../../widgets/confirm_nudge_sheet.dart';
+import '../../../data/models/nudge_model.dart';
+import '../../../business_logic/cubits/nudges_cubit.dart';
+import '../../../business_logic/states/nudges_state.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'chat_history_screen.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../business_logic/cubits/nudges_cubit.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../business_logic/cubits/nudges_cubit.dart';
-import '../../../core/settings/user_settings.dart';
-
-
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -29,20 +19,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
-
-  // API clients
-  late final ApiClient _apiClient;
-  late final AiRepo _aiRepo;
-  late final NudgesRepo _nudgesRepo;
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialize API clients - using mock for now
-    _apiClient = ApiClient(baseUrl: 'http://localhost:3000');
-    _aiRepo = MockAiRepo(); // Mock for testing
-    _nudgesRepo = MockNudgesRepo(); // Mock for testing
-  }
 
   @override
   void dispose() {
@@ -63,20 +39,24 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _isTyping = true);
 
     try {
-      // Check if user wants to create a nudge
+      // Always show AI response first
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      final aiResponse = _generateAIResponse(trimmed);
+      setState(() {
+        _messages.add(ChatMessage(
+          role: MessageRole.assistant,
+          text: aiResponse,
+          time: DateTime.now(),
+        ));
+      });
+
+      // Then check if user wants to create a nudge
       if (_shouldCreateNudge(trimmed)) {
+        await Future.delayed(const Duration(milliseconds: 500));
         await _maybeCreateNudgeFromText(trimmed);
-      } else {
-        // Regular chat response
-        await Future.delayed(const Duration(milliseconds: 600));
-        setState(() {
-          _messages.add(ChatMessage(
-            role: MessageRole.assistant,
-            text: _fakeCoachReply(trimmed),
-            time: DateTime.now(),
-          ));
-        });
       }
+
     } catch (e) {
       setState(() {
         _messages.add(ChatMessage(
@@ -87,20 +67,58 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     } finally {
       setState(() => _isTyping = false);
-      // Wherever this is in _send(...)
-ChatArchive.autosaveFromMessages(_messages);
-
-// ⬇️ Add this line right below the autosave
-await _maybeCreateNudgeFromText(trimmed);
-
+      ChatArchive.autosaveFromMessages(_messages);
       _scrollToBottom();
     }
+  }
+
+  String _generateAIResponse(String userText) {
+    final lower = userText.toLowerCase();
+    
+    if (lower.contains('water') || lower.contains('hydrate')) {
+      return "Great thinking! Staying hydrated is one of the simplest yet most impactful habits. I'd suggest starting with one glass right now, then another after lunch. Would you like me to create a gentle reminder system for this?";
+    }
+    if (lower.contains('sleep') || lower.contains('tired')) {
+      return "Sleep is the foundation of everything else. A simple 10-minute wind-down routine at 21:30 can work wonders - maybe just putting your phone on the charger in another room. Should I set up a reminder for this?";
+    }
+    if (lower.contains('exercise') || lower.contains('workout') || lower.contains('fitness')) {
+      return "Movement doesn't have to be overwhelming! Even 10 jumping jacks or a 2-minute walk can break the pattern and energize you. The key is consistency over intensity. Want me to create a simple movement nudge?";
+    }
+    if (lower.contains('study') || lower.contains('learn') || lower.contains('focus')) {
+      return "Try a 2-minute focus sprint: just open the document and add one bullet point. That's it. The hardest part is often just starting. Should I help you build this micro-habit?";
+    }
+    if (lower.contains('family') || lower.contains('parent') || lower.contains('kids')) {
+      return "Family time is precious and often the first thing that gets squeezed out. What if we started with just one intentional moment - maybe asking 'What was the best part of your day?' at dinner? I can remind you.";
+    }
+    if (lower.contains('friend') || lower.contains('social') || lower.contains('lonely')) {
+      return "Friendships need nurturing, like plants. A quick text or 2-minute call can make someone's day - and yours too. Sometimes we overthink it. Want me to nudge you to reach out?";
+    }
+    if (lower.contains('work') || lower.contains('productivity') || lower.contains('meeting')) {
+      return "Work can feel overwhelming without structure. Try spending 2 minutes at the end of each day reviewing tomorrow's priorities. It's amazing how much clarity this brings. Should I set up a reminder?";
+    }
+    if (lower.contains('stress') || lower.contains('anxiety') || lower.contains('overwhelm')) {
+      return "When things feel overwhelming, the answer is usually to go smaller, not bigger. What's one tiny thing you could do right now to feel a bit more grounded? Even taking 3 deep breaths counts.";
+    }
+    if (lower.contains('habit') || lower.contains('routine') || lower.contains('remind me')) {
+      return "I love that you're thinking about building better habits! The secret is starting ridiculously small. What's something tiny you could do consistently? I'm here to help you stick with it.";
+    }
+    
+    // Default responses
+    final responses = [
+      "I hear you. Let's turn this into a tiny step you can actually do today. What comes to mind?",
+      "That sounds important to you. What would success look like if we started with just 2 minutes a day?",
+      "Got it. The key is finding something so small it feels almost silly not to do it. What might that be?",
+      "Sometimes the best action is the smallest one. What's one micro-step we could try?",
+      "I'm here to help you build lasting change through tiny, consistent actions. What matters most to you right now?",
+    ];
+    
+    return responses[DateTime.now().millisecond % responses.length];
   }
 
   bool _shouldCreateNudge(String text) {
     final lower = text.toLowerCase();
     return lower.contains('remind me') || 
-           lower.contains('create nudge') ||
+           lower.contains('create') ||
            lower.contains('help me') ||
            lower.contains('habit') ||
            lower.contains('routine') ||
@@ -113,118 +131,207 @@ await _maybeCreateNudgeFromText(trimmed);
            lower.contains('work');
   }
 
-// Creates a nudge from the user text via AI, shows confirm, saves to server,
-// then refreshes the UI state so it appears in Personal/My screens instantly.
-Future<void> _maybeCreateNudgeFromText(String text) async {
-  bool shouldCreate = false;
+  Future<void> _maybeCreateNudgeFromText(String text) async {
+    if (!_shouldCreateNudge(text)) return;
 
-  try {
-    if (text.trim().isEmpty) return;
+    try {
+      // Generate a nudge spec based on the text
+      final spec = _generateNudgeFromText(text);
+      
+      if (!mounted) return;
 
-    // If you already have a heuristic function, prefer it.
-    if (mounted && (this as dynamic)._shouldCreateNudge != null) {
-      final f = (this as dynamic)._shouldCreateNudge as bool Function(String);
-      shouldCreate = f(text);
-    } else {
-      // Simple fallback heuristic
-      final lower = text.toLowerCase();
-      shouldCreate = lower.contains('remind me') ||
-                     lower.contains('create nudge') ||
-                     lower.contains('habit') ||
-                     lower.contains('routine');
-    }
-  } catch (_) {
-    // never block
-  }
+      // Show confirmation sheet
+      final ok = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: AppTheme.cardWhite,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => _ConfirmNudgeSheet(
+          spec: spec,
+          onConfirm: () => _createNudge(spec),
+        ),
+      );
 
-  if (!shouldCreate) return;
+      // If confirmed, show success message
+      if (ok == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            
+              content: Text(' Nudge created successfully!'),
+       
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+            
+          );
 
-final tz = await UserSettings.getTimezone();
 
-  try {
-    // 1) Ask backend AI to turn text into a NudgeSpec
-    final spec = await _aiRepo.suggestFromChat(text, tz);
-    if (!mounted) return;
 
-    // 2) Confirm with the user
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => ConfirmNudgeSheet(
-        spec: spec,
-        onConfirm: (s) => _nudgesRepo.createFromSpec(s), // server save
-      ),
-    );
-
-    // 3) If saved, refresh in-app state so it shows up immediately
-    if (ok == true && mounted) {
-      context.read<NudgesCubit>().loadWithAINudges();
-
+        // Add a follow-up AI message
+        setState(() {
+          _messages.add(ChatMessage(
+            role: MessageRole.assistant,
+            text: "Perfect! I've created that nudge for you. You'll find it in your 'My Nudges' section, and it'll start helping you build this habit. Remember, consistency beats perfection!",
+            time: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(
-          content: Text('Nudge saved'),
-          behavior: SnackBarBehavior.floating,
-          duration: Duration(milliseconds: 1200),
-        ));
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Couldn\'t create nudge: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     }
-  } catch (e) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text('Couldn’t create nudge: $e'),
-        behavior: SnackBarBehavior.floating,
-      ));
   }
-}
 
-Future<void> _createNudge(NudgeSpec spec) async {
-  // 1) Save on server (your existing API)
-  await _nudgesRepo.createFromSpec(spec);
-
-  // 2) Persist locally and get the id we just created
-  final newId = await SimpleNudgesStorage.addNudgeWithCategoryReturningId(
+  NudgeSpec _generateNudgeFromText(String text) {
+    final lower = text.toLowerCase();
     
-    spec,
-    NudgeCategory.personal,
-  );
-
-  // 3) Reflect in UI state immediately so it appears in Personal/My Nudges
-  if (mounted) {
-    context.read<NudgesCubit>().addPersonalFromSpec(newId, spec);
+    if (lower.contains('water') || lower.contains('hydrate')) {
+      return NudgeSpec(
+        title: "Stay Hydrated",
+        description: "Drink one glass of water",
+        category: "Health",
+        targetCount: 8,
+        scheduleType: "times_per_day",
+        reminderText: "Hydration time! 💧 Time for a glass of water.",
+      );
+    } else if (lower.contains('sleep') || lower.contains('tired')) {
+      return NudgeSpec(
+        title: "Better Sleep Routine",
+        description: "Put phone on charger outside bedroom",
+        category: "Health",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Wind-down time 🌙 Let's prepare for better sleep.",
+      );
+    } else if (lower.contains('exercise') || lower.contains('workout')) {
+      return NudgeSpec(
+        title: "Daily Movement",
+        description: "Do 10 jumping jacks or 2-minute walk",
+        category: "Fitness",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Let's get moving! 💪 Just 2 minutes of movement.",
+      );
+    } else if (lower.contains('family')) {
+      return NudgeSpec(
+        title: "Connect with Family",
+        description: "Ask someone 'What was the best part of your day?'",
+        category: "Personal",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Family connection time! ❤️ Show someone you care.",
+      );
+    } else if (lower.contains('friend')) {
+      return NudgeSpec(
+        title: "Stay Connected",
+        description: "Send a quick message to a friend",
+        category: "Personal",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Friendship check-in! 👋 Reach out to someone.",
+      );
+    } else if (lower.contains('work') || lower.contains('productivity')) {
+      return NudgeSpec(
+        title: "Work Planning",
+        description: "Review tomorrow's top 3 priorities",
+        category: "Productivity",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Quick planning session 📋 Set tomorrow up for success.",
+      );
+    } else if (lower.contains('study') || lower.contains('learn')) {
+      return NudgeSpec(
+        title: "Learning Habit",
+        description: "Open study material and write one note",
+        category: "Productivity",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Learning time! 📚 Just one small step forward.",
+      );
+    } else {
+      return NudgeSpec(
+        title: "Daily Habit",
+        description: "Take one small positive action",
+        category: "Personal",
+        targetCount: 1,
+        scheduleType: "daily",
+        reminderText: "Time for your daily habit! ✨",
+      );
+    }
   }
-}
+
+  Future<void> _createNudge(NudgeSpec spec) async {
+    // Convert the spec to a Nudge and add it to the cubit
+    final newNudge = Nudge(
+      id: 'ai_nudge_${DateTime.now().millisecondsSinceEpoch}',
+      title: spec.title,
+      description: spec.description,
+      category: spec.category,
+      icon: _getCategoryIcon(spec.category),
+      isActive: true,
+      createdAt: DateTime.now(), createdBy: '',
+    );
+
+    // Determine schedule
+    final scheduleKind = spec.scheduleType == 'times_per_day' 
+        ? ScheduleKind.timesPerDay 
+        : ScheduleKind.timesPerDay; // Default to times per day
+    
+    final schedule = NudgeScheduleSimple(
+      kind: scheduleKind,
+      dailyTarget: spec.targetCount,
+    );
+
+    // Add to cubit
+    final cubit = context.read<NudgesCubit>();
+    
+    // First add to allNudges, then to myNudges with schedule
+    final currentNudges = List<Nudge>.from(cubit.state.allNudges);
+    currentNudges.add(newNudge);
+    
+    cubit.emit(cubit.state.copyWith(allNudges: currentNudges));
+    cubit.addToMyNudges(newNudge.id);
+    cubit.setSchedule(newNudge.id, schedule);
+    
+    print('Created AI nudge: ${newNudge.title} with schedule ${schedule.dailyTarget}x per day');
+  }
+
+  String _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'health':
+        return '💧';
+      case 'fitness':
+        return '💪';
+      case 'productivity':
+        return '📋';
+      case 'personal':
+        return '✨';
+      default:
+        return '🎯';
+    }
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent + 120,
-          duration: const Duration(milliseconds: 250),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOut,
         );
       }
     });
-  }
-
-  String _fakeCoachReply(String userText) {
-    if (userText.toLowerCase().contains('water')) {
-      return "Great start. One glass now, one after lunch. Want a reminder?";
-    }
-    if (userText.toLowerCase().contains('sleep')) {
-      return "Try a 10-minute wind-down at 21:30. I can nudge you.";
-    }
-    if (userText.toLowerCase().contains('study')) {
-      return "2-minute focus sprint: open the doc, add one bullet. I'll check back.";
-    }
-    if (userText.toLowerCase().contains('family')) {
-      return "Family time is precious. What small step can strengthen those bonds?";
-    }
-    if (userText.toLowerCase().contains('friend')) {
-      return "Friendship needs nurturing. A quick text or call can make someone's day.";
-    }
-    return "Got it. Let's turn this into a tiny step you can do today.";
   }
 
   Future<void> _openHistory() async {
@@ -259,7 +366,14 @@ Future<void> _createNudge(NudgeSpec spec) async {
       appBar: AppBar(
         backgroundColor: AppTheme.cardWhite,
         elevation: 0,
-        title: Text(empty ? 'New chat' : 'AI Coach'),
+        title: Text(
+          empty ? 'AI Coach' : 'Chat with Nudge',
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textDark,
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Previous chats',
@@ -275,7 +389,7 @@ Future<void> _createNudge(NudgeSpec spec) async {
         ],
       ),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
+        duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
         child: empty ? _WelcomePane(
@@ -296,8 +410,219 @@ Future<void> _createNudge(NudgeSpec spec) async {
   }
 }
 
-/* -------------------- WELCOME (centered) -------------------- */
+// Confirm nudge bottom sheet
+class _ConfirmNudgeSheet extends StatelessWidget {
+  final NudgeSpec spec;
+  final VoidCallback onConfirm;
 
+  const _ConfirmNudgeSheet({
+    required this.spec,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.borderGray,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _getCategoryIcon(spec.category),
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Create this nudge?',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.textDark,
+                        ),
+                      ),
+                      Text(
+                        'I\'ll help you build this habit',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.textGray,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Nudge details
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.backgroundGray,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    spec.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    spec.description,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textGray,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryPurple.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          spec.category,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryPurple,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.cardWhite,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${spec.targetCount}x per day',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textGray,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // Actions
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Maybe Later'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      onConfirm();
+                      Navigator.of(context).pop(true);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Create Nudge',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getCategoryIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'health':
+        return '💧';
+      case 'fitness':
+        return '💪';
+      case 'productivity':
+        return '📋';
+      case 'personal':
+        return '✨';
+      default:
+        return '🎯';
+    }
+  }
+}
+
+// Welcome pane (when chat is empty)
 class _WelcomePane extends StatelessWidget {
   const _WelcomePane({
     super.key,
@@ -322,51 +647,85 @@ class _WelcomePane extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Logo + name
-                const SizedBox(height: 8),
-                const CircleAvatar(
-                  radius: 36,
-                  backgroundColor: AppTheme.cardWhite,
-                  child: Icon(Icons.auto_awesome_rounded, size: 36, color: AppTheme.textDark),
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryPurple.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.psychology_rounded,
+                    size: 40,
+                    color: AppTheme.primaryPurple,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                const Text('Nudge', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
+                const Text(
+                  'AI Behavioral Coach',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tell me about a habit you\'d like to build, and I\'ll help you create tiny, sustainable nudges.',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppTheme.textGray,
+                    height: 1.4,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
 
-                // Big prompt card
-                Material(
-                  color: AppTheme.cardWhite,
-                  borderRadius: BorderRadius.circular(20),
-                  elevation: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.edit_rounded, color: AppTheme.textGray),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: controller,
-                            autofocus: false,
-                            maxLines: 3,
-                            minLines: 1,
-                            textInputAction: TextInputAction.send,
-                            onSubmitted: onSend,
-                            decoration: const InputDecoration(
-                              hintText: 'Chat with Nudge...',
-                              border: InputBorder.none,
-                            ),
+                // Suggestion chips
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _SuggestionChip('Drink more water', controller, onSend),
+                    _SuggestionChip('Exercise daily', controller, onSend),
+                    _SuggestionChip('Better sleep routine', controller, onSend),
+                    _SuggestionChip('Connect with family', controller, onSend),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+
+                // Input field
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardWhite,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppTheme.borderGray),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: 'What habit would you like to build?',
+                            border: InputBorder.none,
                           ),
+                          maxLines: 3,
+                          minLines: 1,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: onSend,
                         ),
-                        IconButton(
-                          tooltip: 'Send',
-                          onPressed: () {
-                            final t = controller.text.trim();
-                            if (t.isNotEmpty) onSend(t);
-                          },
-                          icon: const Icon(Icons.arrow_upward_rounded),
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          final text = controller.text.trim();
+                          if (text.isNotEmpty) onSend(text);
+                        },
+                        icon: const Icon(Icons.send_rounded),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -374,10 +733,9 @@ class _WelcomePane extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onHistoryTap,
                   icon: const Icon(Icons.history_rounded),
-                  label: const Text('Previous chats'),
+                  label: const Text('View chat history'),
                   style: TextButton.styleFrom(foregroundColor: AppTheme.textGray),
                 ),
-                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -387,8 +745,40 @@ class _WelcomePane extends StatelessWidget {
   }
 }
 
-/* -------------------- CHAT (after first send) -------------------- */
+class _SuggestionChip extends StatelessWidget {
+  final String text;
+  final TextEditingController controller;
+  final Function(String) onSend;
 
+  const _SuggestionChip(this.text, this.controller, this.onSend);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        controller.text = text;
+        onSend(text);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppTheme.cardWhite,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.borderGray),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 14,
+            color: AppTheme.textDark,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Chat pane (after first message)
 class _ChatPane extends StatelessWidget {
   const _ChatPane({
     super.key,
@@ -412,28 +802,60 @@ class _ChatPane extends StatelessWidget {
         Expanded(
           child: ListView.separated(
             controller: scrollController,
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConstants.paddingLarge,
-              vertical: AppConstants.paddingLarge,
-            ),
+            padding: const EdgeInsets.all(16),
             itemCount: messages.length + (isTyping ? 1 : 0),
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, __) => const SizedBox(height: 16),
             itemBuilder: (context, index) {
-              if (isTyping && index == messages.length) return const _TypingDots();
-              final m = messages[index];
-              return _ChatBubble(message: m);
+              if (isTyping && index == messages.length) {
+                return _TypingIndicator();
+              }
+              final message = messages[index];
+              return _ChatBubble(message: message);
             },
           ),
         ),
         SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppConstants.paddingLarge, 8, AppConstants.paddingLarge, AppConstants.paddingLarge),
-            child: _Composer(
-              controller: controller,
-              onSend: onSend,
-              enabled: !isTyping,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            color: AppTheme.cardWhite,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    decoration: InputDecoration(
+                      hintText: 'Type your message...',
+                      filled: true,
+                      fillColor: AppTheme.backgroundGray,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    maxLines: 3,
+                    minLines: 1,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (text) {
+                      if (text.trim().isNotEmpty) {
+                        onSend(text);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FloatingActionButton(
+                  mini: true,
+                  onPressed: () {
+                    final text = controller.text.trim();
+                    if (text.isNotEmpty) {
+                      onSend(text);
+                    }
+                  },
+                  child: const Icon(Icons.send_rounded),
+                ),
+              ],
             ),
           ),
         ),
@@ -442,137 +864,147 @@ class _ChatPane extends StatelessWidget {
   }
 }
 
-/* -------------------- Reusable pieces -------------------- */
-
-class _Composer extends StatelessWidget {
-  const _Composer({required this.controller, required this.onSend, required this.enabled});
-  final TextEditingController controller;
-  final Future<void> Function(String) onSend;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.cardWhite,
-      borderRadius: BorderRadius.circular(20),
-      child: Row(
-        children: [
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              enabled: enabled,
-              minLines: 1, maxLines: 5,
-              textInputAction: TextInputAction.send,
-              decoration: const InputDecoration(
-                hintText: 'Message Nudge…',
-                border: InputBorder.none,
-                isDense: true,
-              ),
-              onSubmitted: (text) {
-                if (text.trim().isNotEmpty) {
-                  onSend(text);
-                }
-              },
-            ),
-          ),
-          IconButton(
-            tooltip: 'Send',
-            onPressed: enabled && controller.text.trim().isNotEmpty
-                ? () => onSend(controller.text) : null,
-            icon: const Icon(Icons.send_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ChatBubble extends StatelessWidget {
-  const _ChatBubble({required this.message});
   final ChatMessage message;
+
+  const _ChatBubble({required this.message});
 
   @override
   Widget build(BuildContext context) {
     final isUser = message.role == MessageRole.user;
+    
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
       children: [
-        if (!isUser)
-          const CircleAvatar(
-            radius: 14,
+        if (!isUser) ...[
+          CircleAvatar(
+            radius: 16,
             backgroundColor: AppTheme.primaryPurple,
-            child: Icon(Icons.psychology_rounded, size: 16, color: Colors.white),
+            child: const Icon(
+              Icons.psychology_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
           ),
-        if (!isUser) const SizedBox(width: 8),
+          const SizedBox(width: 12),
+        ],
+        
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: isUser ? AppTheme.primaryBlue.withOpacity(0.10) : AppTheme.cardWhite,
+              color: isUser 
+                  ? AppTheme.primaryPurple 
+                  : AppTheme.cardWhite,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
                 topRight: const Radius.circular(16),
                 bottomLeft: Radius.circular(isUser ? 16 : 4),
                 bottomRight: Radius.circular(isUser ? 4 : 16),
               ),
-              border: Border.all(color: AppTheme.borderGray),
+              border: isUser ? null : Border.all(color: AppTheme.borderGray),
             ),
-            child: Text(message.text, style: const TextStyle(height: 1.35)),
+            child: Text(
+              message.text,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.4,
+                color: isUser ? Colors.white : AppTheme.textDark,
+              ),
+            ),
           ),
         ),
-        if (isUser) const SizedBox(width: 8),
-        if (isUser)
-          const CircleAvatar(
-            radius: 14,
-            backgroundColor: AppTheme.textDark,
-            child: Icon(Icons.person, size: 16, color: Colors.white),
+        
+        if (isUser) ...[
+          const SizedBox(width: 12),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: AppTheme.textGray,
+            child: const Icon(
+              Icons.person_rounded,
+              size: 18,
+              color: Colors.white,
+            ),
           ),
+        ],
       ],
     );
   }
 }
 
-class _TypingDots extends StatefulWidget {
-  const _TypingDots();
+class _TypingIndicator extends StatefulWidget {
   @override
-  State<_TypingDots> createState() => _TypingDotsState();
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
 }
-class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderStateMixin {
-  late final AnimationController _ac =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+
+class _TypingIndicatorState extends State<_TypingIndicator> 
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+
   @override
-  void dispose() { _ac.dispose(); super.dispose(); }
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const CircleAvatar(
-          radius: 14,
+        CircleAvatar(
+          radius: 16,
           backgroundColor: AppTheme.primaryPurple,
-          child: Icon(Icons.psychology_rounded, size: 16, color: Colors.white),
+          child: const Icon(
+            Icons.psychology_rounded,
+            size: 18,
+            color: Colors.white,
+          ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 12),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppTheme.cardWhite,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomLeft: Radius.circular(4),
+              bottomRight: Radius.circular(16),
+            ),
             border: Border.all(color: AppTheme.borderGray),
           ),
           child: AnimatedBuilder(
-            animation: _ac,
-            builder: (_, __) {
-              final v = (t) => (1 + 0.5 * (1 + MathUtils.sin(2 * 3.1415 * (t)))) / 2;
-              final t = _ac.value;
+            animation: _controller,
+            builder: (context, child) {
               return Row(
                 mainAxisSize: MainAxisSize.min,
-                children: List.generate(3, (i) {
-                  final scale = v((t + i / 3) % 1);
+                children: List.generate(3, (index) {
+                  final delay = index * 0.3;
+                  final value = (_controller.value + delay) % 1.0;
+                  final opacity = (0.4 + 0.6 * (0.5 + 0.5 * 
+                      _sine(value * 2 * 3.14159))).clamp(0.0, 1.0);
+                  
                   return Padding(
-                    padding: EdgeInsets.only(right: i == 2 ? 0 : 6),
-                    child: Transform.scale(scale: 0.8 + 0.25 * scale, child: const _Dot()),
+                    padding: EdgeInsets.only(right: index == 2 ? 0 : 4),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: AppTheme.textGray.withOpacity(opacity),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                   );
                 }),
               );
@@ -582,152 +1014,81 @@ class _TypingDotsState extends State<_TypingDots> with SingleTickerProviderState
       ],
     );
   }
-}
-class _Dot extends StatelessWidget {
-  const _Dot();
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 6, height: 6,
-      child: DecoratedBox(decoration: BoxDecoration(color: AppTheme.textGray, shape: BoxShape.circle)),
-    );
-  }
-}
 
-/* -------------------- Mock Classes for Testing -------------------- */
-
-class MockAiRepo implements AiRepo {
-  @override
-  Future<NudgeSpec> suggestFromChat(String userInput, String tz) async {
-    await Future.delayed(const Duration(milliseconds: 1200)); // Simulate network delay
+  double _sine(double x) {
+    // Simple sine approximation
+    while (x > 3.14159) x -= 2 * 3.14159;
+    while (x < -3.14159) x += 2 * 3.14159;
     
-    // Generate different nudges based on input
-    if (userInput.toLowerCase().contains('water')) {
-      return NudgeSpec(
-        title: "Drink more water",
-        microStep: "Fill and finish one glass",
-        tone: "friendly",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=11;BYMINUTE=0",
-        reminderCopy: "Hydration time! 💧",
-      );
-    } else if (userInput.toLowerCase().contains('sleep')) {
-      return NudgeSpec(
-        title: "Better sleep routine",
-        microStep: "Put phone on charger in hallway",
-        tone: "gentle",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=21;BYMINUTE=30",
-        reminderCopy: "Wind-down time 🌙",
-      );
-    } else if (userInput.toLowerCase().contains('exercise')) {
-      return NudgeSpec(
-        title: "Daily movement",
-        microStep: "Do 10 jumping jacks",
-        tone: "motivational",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=8;BYMINUTE=0",
-        reminderCopy: "Let's get moving! 💪",
-      );
-    } else if (userInput.toLowerCase().contains('family')) {
-      return NudgeSpec(
-        title: "Connect with family",
-        microStep: "Send one text to family member",
-        tone: "warm",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=18;BYMINUTE=0",
-        reminderCopy: "Family time! ❤️",
-      );
-    } else if (userInput.toLowerCase().contains('friend')) {
-      return NudgeSpec(
-        title: "Stay connected with friends",
-        microStep: "Send a quick message to a friend",
-        tone: "friendly",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=19;BYMINUTE=0",
-        reminderCopy: "Friendship check-in! 👋",
-      );
-    } else if (userInput.toLowerCase().contains('work')) {
-      return NudgeSpec(
-        title: "Work productivity",
-        microStep: "Review tomorrow's priorities",
-        tone: "professional",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=17;BYMINUTE=0",
-        reminderCopy: "Quick planning session 📋",
-      );
-    } else {
-      return NudgeSpec(
-        title: "Daily habit",
-        microStep: "Take one small action",
-        tone: "friendly",
-        channels: const ["push"],
-        tz: tz,
-        rrule: "FREQ=DAILY;BYHOUR=12;BYMINUTE=0",
-        reminderCopy: "Time for your daily habit! ✨",
-      );
-    }
+    if (x < 0) return -_sine(-x);
+    
+    final x2 = x * x;
+    return x * (1 - x2 / 6 * (1 - x2 / 20 * (1 - x2 / 42)));
   }
 }
 
-class MockNudgesRepo implements NudgesRepo {
-  @override
-  Future<String> createFromSpec(NudgeSpec spec) async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    // Determine category based on content
-    final category = _determineCategory(spec.title + " " + spec.microStep);
-    
-    // Save with category and AI flag, and get the new nudge ID
-    final newId = await SimpleNudgesStorage.addNudgeWithCategoryReturningId(spec, category);
-    print('Saved AI nudge: ${spec.title} in ${category.name} category');
-    return newId;
-  }
-  
-  NudgeCategory _determineCategory(String content) {
-    final lower = content.toLowerCase();
-    if (lower.contains('family') || lower.contains('parent') || lower.contains('kid') || lower.contains('mom') || lower.contains('dad')) {
-      return NudgeCategory.family;
-    }
-    if (lower.contains('friend') || lower.contains('social') || lower.contains('together') || lower.contains('connect')) {
-      return NudgeCategory.friends;
-    }
-    if (lower.contains('work') || lower.contains('meeting') || lower.contains('project') || lower.contains('office') || lower.contains('productivity')) {
-      return NudgeCategory.work;
-    }
-    return NudgeCategory.personal;
-  }
-}
-
-/* -------------------- Lightweight models & archive -------------------- */
-
+// Data models
 enum MessageRole { user, assistant }
+
 class ChatMessage {
-  final MessageRole role; final String text; final DateTime time;
-  ChatMessage({required this.role, required this.text, required this.time});
-}
-class ChatSession {
-  final String id; final String title; final DateTime updatedAt; final List<ChatMessage> messages;
-  ChatSession({required this.id, required this.title, required this.updatedAt, required this.messages});
+  final MessageRole role;
+  final String text;
+  final DateTime time;
+
+  ChatMessage({
+    required this.role, 
+    required this.text, 
+    required this.time,
+  });
 }
 
+class ChatSession {
+  final String id;
+  final String title;
+  final DateTime updatedAt;
+  final List<ChatMessage> messages;
+
+  ChatSession({
+    required this.id,
+    required this.title,
+    required this.updatedAt,
+    required this.messages,
+  });
+}
+
+class NudgeSpec {
+  final String title;
+  final String description;
+  final String category;
+  final int targetCount;
+  final String scheduleType;
+  final String reminderText;
+
+  NudgeSpec({
+    required this.title,
+    required this.description,
+    required this.category,
+    required this.targetCount,
+    required this.scheduleType,
+    required this.reminderText,
+  });
+}
+
+// Chat archive for storing conversations
 class ChatArchive {
   static final List<ChatSession> _sessions = [];
+
   static void saveSessionFromMessages(List<ChatMessage> messages) {
     if (messages.isEmpty) return;
     final title = _deriveTitle(messages);
     _sessions.insert(0, ChatSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: title, updatedAt: DateTime.now(),
+      title: title,
+      updatedAt: DateTime.now(),
       messages: List<ChatMessage>.from(messages),
     ));
   }
+
   static void autosaveFromMessages(List<ChatMessage> messages) {
     if (messages.isEmpty) return;
     final title = _deriveTitle(messages);
@@ -735,28 +1096,24 @@ class ChatArchive {
       saveSessionFromMessages(messages);
     } else {
       _sessions[0] = ChatSession(
-        id: _sessions[0].id, title: title, updatedAt: DateTime.now(),
+        id: _sessions[0].id,
+        title: title,
+        updatedAt: DateTime.now(),
         messages: List<ChatMessage>.from(messages),
       );
     }
   }
-  static List<ChatSession> all() => List.unmodifiable(_sessions);
-  static void delete(String id) => _sessions.removeWhere((s) => s.id == id);
-  static String _deriveTitle(List<ChatMessage> messages) {
-    final firstUser = messages.firstWhere((m) => m.role == MessageRole.user, orElse: () => messages.first);
-    final t = firstUser.text.trim();
-    return t.length <= 40 ? t : '${t.substring(0, 40)}…';
-  }
-}
 
-class MathUtils {
-  static double sin(double x) => _sinApprox(x);
-  static double _sinApprox(double x) {
-    const pi = 3.1415926535897932;
-    x = x % (2 * pi);
-    if (x > pi) x -= 2 * pi;
-    if (x < -pi) x += 2 * pi;
-    final y = (16 * x * (pi - x)) / (5 * pi * pi - 4 * x * (pi - x));
-    return y.clamp(-1.0, 1.0);
+  static List<ChatSession> all() => List.unmodifiable(_sessions);
+  
+  static void delete(String id) => _sessions.removeWhere((s) => s.id == id);
+
+  static String _deriveTitle(List<ChatMessage> messages) {
+    final firstUser = messages.firstWhere(
+      (m) => m.role == MessageRole.user,
+      orElse: () => messages.first,
+    );
+    final text = firstUser.text.trim();
+    return text.length <= 40 ? text : '${text.substring(0, 40)}…';
   }
 }
