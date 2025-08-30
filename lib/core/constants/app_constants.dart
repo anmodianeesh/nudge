@@ -4,9 +4,11 @@ class AppConstants {
   static const String appTagline = 'Your AI Behavioral Companion';
   
   // API (we'll add these later)
-  static const String supabaseUrl = 'YOUR_SUPABASE_URL';
-  static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+
+  static const String supabaseUrl = 'https://gxrdowsojofpocspqoje.supabase.co';
+  static const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4cmRvd3Nvam9mcG9jc3Bxb2plIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY0MjI5NDcsImV4cCI6MjA3MTk5ODk0N30.msW84Kpiowvk3mifOJaqfazfPxSS_N1_rdoW7Z0koNs';
   static const String openaiApiKey = 'YOUR_OPENAI_API_KEY';
+  
   
   // Routes
   static const String splashRoute = '/';

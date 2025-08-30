@@ -8,6 +8,11 @@ import '../analytics/analytics_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../../business_logic/cubits/nudges_cubit.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../data/services/supabase_service.dart'; // adjust path if different
+import '../../business_logic/cubits/nudges_cubit.dart';
+
 
 class RootNav extends StatefulWidget {
   const RootNav({super.key});

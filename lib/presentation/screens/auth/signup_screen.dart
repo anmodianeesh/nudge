@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../../data/services/supabase_service.dart';
+import '../../navigation/root_nav.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../onboarding/user_info_screen.dart';
+import '../../../data/repositories/auth_repository.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -29,28 +33,102 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  Future<void> _handleEmailSignup() async {
+  Future<void> _handleEmailSignUp() async {
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => _isLoading = true);
-    // Simulate signup delay
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isLoading = false);
-    
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => UserInfoScreen(
-            userName: _nameController.text,
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final fullName = _nameController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
+    try {
+      // 1) Try to sign up (and save name into auth metadata)
+      final res = await SupabaseService.client.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'full_name': fullName,
+        },
+      );
+
+      // 2) If we get a user/session immediately (no email confirm required)
+      if (res.user != null) {
+        // upsert profiles row with the name
+        try {
+          await SupabaseService.client.from('profiles').upsert({
+            'id': res.user!.id,
+            if (fullName.isNotEmpty) 'full_name': fullName,
+          });
+        } catch (e, st) {
+          debugPrint('profiles upsert failed: $e\n$st'); // don't block signup
+        }
+
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        
+        // After successful sign up (res.user != null)
+        final name = fullName; // your text field value
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => UserInfoScreen(userName: name)),
+          (r) => false,
+        );
+
+        return;
+      }
+
+      // 3) If email confirmation is required, help the user
+      await SupabaseService.client.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
+
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Check your email to confirm $email. We\'ve resent the link.')),
+      );
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+
+      // 4) If this email is already registered, show error message
+      if (msg.contains('already registered')) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This email is already registered. Please use the login screen to sign in.'),
+            duration: Duration(seconds: 4),
           ),
-        ),
+        );
+        return;
+      }
+
+      // Other auth errors
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Something went wrong. Please try again.')),
       );
     }
   }
 
   Future<void> _handleSocialSignup(String provider) async {
     setState(() => _isLoading = true);
-    // Simulate social signup
+    // Simulate social signup - in real implementation, handle OAuth
     await Future.delayed(const Duration(seconds: 1));
     setState(() => _isLoading = false);
     
@@ -208,7 +286,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 // Create Account Button
                 CustomButton(
                   text: 'Create Account',
-                  onPressed: _handleEmailSignup,
+                  onPressed: _handleEmailSignUp,
                   isLoading: _isLoading,
                 ),
                 const SizedBox(height: 16),

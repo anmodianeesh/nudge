@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:nudge/presentation/screens/chat/chat_screen.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../business_logic/cubits/nudges_cubit.dart';
 import '../../../business_logic/states/nudges_state.dart';
 import '../../../data/models/nudge_model.dart';
+import '../../../data/repositories/nudge_repository.dart';
+import 'widgets/personal_nudges_list.dart';
+import '../../screens/nudges/premade_nudges_screen.dart';
+
 
 class PersonalNudgesScreen extends StatefulWidget {
   const PersonalNudgesScreen({super.key});
@@ -19,6 +24,9 @@ class _PersonalNudgesScreenState extends State<PersonalNudgesScreen> {
   String _selectedCategory = 'All';
   bool _isSelectionMode = false;
   final Set<String> _selectedNudgeIds = <String>{};
+
+  final _repo = NudgeRepository();
+
   
   // Deleted nudges system (temporary storage with undo capability)
   final Map<String, _DeletedNudge> _deletedNudges = <String, _DeletedNudge>{};
@@ -268,10 +276,10 @@ class _PersonalNudgesScreenState extends State<PersonalNudgesScreen> {
         title: _isSelectionMode
             ? Text('${_selectedNudgeIds.length} selected')
             : const Text(
-                'My Nudges',
+                'Personal Nudges',
                 style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.textDark,
                 ),
               ),
@@ -295,20 +303,108 @@ class _PersonalNudgesScreenState extends State<PersonalNudgesScreen> {
               onPressed: _toggleSelectionMode,
               tooltip: 'Select multiple',
             ),
-            IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: () {
-                // Navigate to add nudge screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Add nudge feature coming soon'),
-                    backgroundColor: AppTheme.primaryPurple,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
-              },
+            PopupMenuButton<String>(
+  icon: const Icon(Icons.add),
+  tooltip: 'Add nudge',
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  offset: const Offset(0, 40),
+  itemBuilder: (context) => [
+    PopupMenuItem<String>(
+      value: 'ai_chat',
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryPurple.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
             ),
+            child: const Icon(
+              Icons.psychology_outlined,
+              size: 18,
+              color: AppTheme.primaryPurple,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'AI Coach',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              Text(
+                'Create custom nudges with AI',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textGray,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+    PopupMenuItem<String>(
+      value: 'premade',
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Icon(
+              Icons.view_module_outlined,
+              size: 18,
+              color: Colors.blue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Premade Nudges',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
+              Text(
+                'Choose from ready-made nudges',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textGray,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  ],
+  onSelected: (value) {
+ switch (value) {
+   case 'ai_chat':
+     Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ChatScreen()),
+                  );
+     break;
+   case 'premade':
+     Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PremadeNudgesScreen()),
+                  );
+     break;
+ }
+},
+  ),
           ],
         ],
       ),

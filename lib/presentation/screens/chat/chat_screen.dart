@@ -297,7 +297,7 @@ class _ChatScreenState extends State<ChatScreen> {
       icon: _getCategoryIcon(spec.category),
       isActive: true,
       createdAt: DateTime.now(), 
-      createdBy: '',
+      createdBy: '', frequency: '',
     );
 
     // Determine schedule

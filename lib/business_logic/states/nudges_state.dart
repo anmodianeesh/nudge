@@ -33,6 +33,7 @@ class NudgesState {
 
   /// Quick toggle cache for "completed today" (derived from [completionsByDate]).
   final Set<String> completedTodayIds;
+  final bool isLoading; // NEW
 
   /// Snoozed-until map.
   final Map<String, DateTime> snoozedUntil;
@@ -52,6 +53,9 @@ class NudgesState {
     this.completionsByDate = const {},
     this.schedules = const {},
     this.dailyLogs = const {},
+    this.isLoading = false, // NEW default
+
+
     this.error,
   });
 
@@ -233,6 +237,8 @@ class NudgesState {
     Map<String, Set<String>>? completionsByDate,
     Map<String, NudgeScheduleSimple>? schedules,
     Map<String, Map<String, int>>? dailyLogs,
+    bool? isLoading, // NEW
+
     String? error,
   }) {
     return NudgesState(
@@ -244,6 +250,8 @@ class NudgesState {
       completionsByDate: completionsByDate ?? this.completionsByDate,
       schedules: schedules ?? this.schedules,
       dailyLogs: dailyLogs ?? this.dailyLogs,
+      isLoading: isLoading ?? this.isLoading, // NEW
+
       error: error,
     );
   }

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../business_logic/cubits/nudges_cubit.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import 'signup_screen.dart';
-import '../home/home_screen.dart';
-
+import '../../navigation/root_nav.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../../main.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -26,22 +30,38 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleEmailLogin() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    setState(() => _isLoading = true);
-    
-    // Simulate login delay
-    await Future.delayed(const Duration(seconds: 1));
-    
-    setState(() => _isLoading = false);
-    
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-    }
+Future<void> _handleEmailLogin() async {
+  if (!_formKey.currentState!.validate()) return;
+  setState(() => _isLoading = true);
+
+  try {
+    final repo = AuthRepository();
+    await repo.signInWithEmail(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (!mounted) return;
+
+    // Optional: kick a pull so state is warm on first frame
+    await context.read<NudgesCubit>().loadFromCloud();
+
+    // "Soft" hot-restart the whole app tree
+    RestartWidget.restartApp(context);
+
+    // No manual navigation here — AuthGate's build() will see the session
+    // and go to RootNav immediately.
+
+  } on AuthException catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+  } catch (e) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sign-in failed: $e')));
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
 
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
@@ -54,8 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (mounted) {
       // For existing users, go directly to home
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
+  MaterialPageRoute(builder: (_) => const RootNav()),
+);
+
     }
   }
 
@@ -107,6 +128,32 @@ class _LoginScreenState extends State<LoginScreen> {
                 
                 const SizedBox(height: 12),
                 
+ElevatedButton(
+  onPressed: () async {
+    try {
+      final auth = Supabase.instance.client.auth;
+      final resp = await auth.signUp(
+        email: 'testuser@example.com',
+        password: 'password123',
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Signed up: ${resp.user?.id ?? "null"}')),
+      );
+    } on AuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AuthException: ${e.message}')),
+      );
+      debugPrint('CODE: ${e.code}');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  },
+  child: const Text('Supabase SignUp Self-Test'),
+),
+
+
                 CustomButton(
                   text: 'Continue with Google',
                   onPressed: () => _handleSocialLogin('google'),

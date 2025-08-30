@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../widgets/common/custom_button.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../home/home_screen.dart';  // Fixed path
+import '../../navigation/root_nav.dart';
+import '../../screens/auth/signup_screen.dart';
+
 
 class UserInfoScreen extends StatefulWidget {
   final String userName;
@@ -21,12 +24,15 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   int currentStep = 0;
   final PageController _pageController = PageController();
   
+  
   // Form controllers
   final TextEditingController _goalController = TextEditingController();
   DateTime? _selectedDate;
   String? _selectedGender;
-  String? _primaryGoal;
+  String? _displayName;
+  final List<String> _selectedGoals = [];      // Changed to multi-select
   final List<String> _selectedChallenges = [];
+  bool _isLoading = false;
   
   final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
   final List<String> _goalOptions = [
@@ -47,11 +53,86 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadDisplayName();
+  }
+
+  @override
   void dispose() {
     _goalController.dispose();
     _pageController.dispose();
     super.dispose();
   }
+
+  // Helper method to format date as yyyy-mm-dd string
+  String? _fmtDate(DateTime? date) {
+    if (date == null) return null;
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _loadDisplayName() async {
+    try {
+      final client = SupabaseService.client;
+      final user = client.auth.currentUser;
+
+      // 1) Try auth metadata first
+      final metaName = user?.userMetadata?['full_name'] as String?;
+      if (metaName != null && metaName.trim().isNotEmpty) {
+        if (mounted) {
+          setState(() => _displayName = metaName.trim());
+        }
+        return;
+      }
+
+      // 2) Try profiles table if user exists
+      if (user != null) {
+        final res = await client
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        final profName = (res != null ? res['full_name'] as String? : null);
+        if (profName != null && profName.trim().isNotEmpty) {
+          if (mounted) {
+            setState(() => _displayName = profName.trim());
+          }
+          return;
+        }
+      }
+
+      // 3) Fallback to the name passed in
+      if (widget.userName.isNotEmpty && mounted) {
+        setState(() => _displayName = widget.userName);
+      }
+    } catch (e) {
+      // If anything fails, fall back to widget.userName
+      if (mounted && widget.userName.isNotEmpty) {
+        setState(() => _displayName = widget.userName);
+      }
+    }
+  }
+
+Future<void> _saveUserInfo() async {
+  final client = SupabaseService.client;
+  final user = client.auth.currentUser;
+  if (user == null) return;
+
+  final payload = {
+    'id': user.id,
+    if ((_displayName ?? '').trim().isNotEmpty) 'full_name': _displayName!.trim(),
+    'dob': _fmtDate(_selectedDate),      // yyyy-mm-dd string; your helper from earlier
+    'gender': _selectedGender,
+    'goals': _selectedGoals,             // text[]
+    'challenges': _selectedChallenges,   // text[]
+    'onboarding_complete': true,         // <<— NEW
+    'updated_at': DateTime.now().toIso8601String(),
+  };
+  payload.removeWhere((_, v) => v == null);
+
+  await client.from('profiles').upsert(payload);
+}
 
   void _nextStep() {
     if (currentStep < 3) {
@@ -75,12 +156,13 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
     }
   }
 
-  void _completeOnboarding() {
-    // Save user data (will implement with backend later)
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
-    );
-  }
+  Future<void> _completeOnboarding() async {
+  try { await _saveUserInfo(); } catch (_) {}
+  if (!mounted) return;
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(builder: (_) => const RootNav()),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +206,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
             children: [
               if (currentStep > 0)
                 IconButton(
-                  onPressed: _previousStep,
+                  onPressed: _isLoading ? null : _previousStep,
                   icon: const Icon(Icons.arrow_back_ios),
                   color: AppTheme.textDark,
                 )
@@ -174,7 +256,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           ),
           const SizedBox(height: 32),
           Text(
-            'Hi ${widget.userName}!',
+            'Hi ${_displayName ?? widget.userName}!',
             style: const TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -241,9 +323,9 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'This helps me understand what matters most to you',
-            style: TextStyle(
+          Text(
+            'Select any that apply - this helps me understand what matters most to you',
+            style: const TextStyle(
               fontSize: 16,
               color: AppTheme.textGray,
             ),
@@ -254,14 +336,18 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
               itemCount: _goalOptions.length,
               itemBuilder: (context, index) {
                 final goal = _goalOptions[index];
-                final isSelected = _primaryGoal == goal;
+                final isSelected = _selectedGoals.contains(goal);
                 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: GestureDetector(
                     onTap: () {
                       setState(() {
-                        _primaryGoal = goal;
+                        if (isSelected) {
+                          _selectedGoals.remove(goal);
+                        } else {
+                          _selectedGoals.add(goal);
+                        }
                       });
                     },
                     child: Container(
@@ -284,34 +370,26 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                             width: 20,
                             height: 20,
                             decoration: BoxDecoration(
-                              color: isSelected 
-                                  ? AppTheme.primaryPurple 
-                                  : Colors.transparent,
+                              color: isSelected ? AppTheme.primaryPurple : Colors.transparent,
                               border: Border.all(
-                                color: isSelected 
-                                    ? AppTheme.primaryPurple 
-                                    : AppTheme.borderGray,
+                                color: isSelected ? AppTheme.primaryPurple : AppTheme.borderGray,
                                 width: 2,
                               ),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: isSelected
-                                ? const Icon(
-                                    Icons.check,
-                                    size: 12,
-                                    color: AppTheme.cardWhite,
-                                  )
+                                ? const Icon(Icons.check, size: 12, color: AppTheme.cardWhite)
                                 : null,
                           ),
                           const SizedBox(width: 16),
-                          Text(
-                            goal,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: isSelected 
-                                  ? AppTheme.primaryPurple 
-                                  : AppTheme.textDark,
+                          Expanded(
+                            child: Text(
+                              goal,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: isSelected ? AppTheme.primaryPurple : AppTheme.textDark,
+                              ),
                             ),
                           ),
                         ],
@@ -322,6 +400,35 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
               },
             ),
           ),
+          if (_selectedGoals.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: AppTheme.primaryPurple,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_selectedGoals.length} goal${_selectedGoals.length == 1 ? '' : 's'} selected',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.primaryPurple,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -416,12 +523,13 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
+            runSpacing: 8,
             children: _genderOptions.map((gender) {
               final isSelected = _selectedGender == gender;
               return GestureDetector(
                 onTap: () {
                   setState(() {
-                    _selectedGender = gender;
+                    _selectedGender = isSelected ? null : gender;
                   });
                 },
                 child: Container(
@@ -541,14 +649,16 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
                                 : null,
                           ),
                           const SizedBox(width: 16),
-                          Text(
-                            challenge,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: isSelected 
-                                  ? AppTheme.primaryPurple 
-                                  : AppTheme.textDark,
+                          Expanded(
+                            child: Text(
+                              challenge,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: isSelected 
+                                    ? AppTheme.primaryPurple 
+                                    : AppTheme.textDark,
+                              ),
                             ),
                           ),
                         ],
@@ -559,6 +669,37 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
               },
             ),
           ),
+          if (_selectedChallenges.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPurple.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppTheme.primaryPurple.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.psychology_outlined,
+                    color: AppTheme.primaryPurple,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'I\'ll help you tackle these ${_selectedChallenges.length} challenge${_selectedChallenges.length == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.primaryPurple,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -575,7 +716,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
             Expanded(
               child: CustomButton(
                 text: 'Back',
-                onPressed: _previousStep,
+                onPressed: _isLoading ? null : _previousStep,
                 backgroundColor: AppTheme.cardWhite,
                 textColor: AppTheme.textDark,
                 borderColor: AppTheme.borderGray,
@@ -584,8 +725,10 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
           if (currentStep > 0) const SizedBox(width: 16),
           Expanded(
             child: CustomButton(
-              text: currentStep == 3 ? 'Get Started' : 'Continue',
-              onPressed: canProceed ? _nextStep : null,
+              text: currentStep == 3 ? 
+                (_isLoading ? 'Setting up...' : 'Get Started') : 
+                'Continue',
+              onPressed: (canProceed && !_isLoading) ? _nextStep : null,
             ),
           ),
         ],
@@ -598,7 +741,7 @@ class _UserInfoScreenState extends State<UserInfoScreen> {
       case 0:
         return true; // Welcome step
       case 1:
-        return _primaryGoal != null; // Goal selection required
+        return true; // Goals are now optional (multi-select)
       case 2:
         return _selectedDate != null; // DOB required, gender optional
       case 3:

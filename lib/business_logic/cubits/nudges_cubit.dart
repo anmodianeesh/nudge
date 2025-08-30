@@ -8,8 +8,17 @@ import 'package:nudge/business_logic/states/nudges_state.dart';
 import 'package:nudge/data/models/nudge_model.dart';
 import 'package:nudge/data/premade_nudges_data.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:nudge/data/repositories/nudge_repository.dart';
+import 'package:nudge/data/services/supabase_service.dart';
+
+
 class NudgesCubit extends Cubit<NudgesState> {
   NudgesCubit() : super(const NudgesState());
+
+  final _repo = NudgeRepository(); 
+  final _c = SupabaseService.client;
+
 bool _mocksAdded = false;
   // ─────────────────────────────────────────────────────────────────────────────
   // Initialization
@@ -168,8 +177,107 @@ void _addMockGroupAndFriendNudges(
   schedules[friendNudge2.id] =
       const NudgeScheduleSimple(kind: ScheduleKind.timesPerDay, dailyTarget: 1);
 
-  // Mark as added so subsequent loads don’t duplicate them.
+  // Mark as added so subsequent loads don't duplicate them.
   _mocksAdded = true;
+}
+
+Future<void> loadFromCloud() async {
+  final user = SupabaseService.client.auth.currentUser;
+  if (user == null) return;
+
+  emit(state.copyWith(isLoading: true));
+
+  try {
+    final nudges = await _repo.listUserNudges(user.id); // now includes schedule + ext.last_done_at
+
+    // Build schedules from JSON; fallback to heuristic.
+    final scheds = <String, NudgeScheduleSimple>{};
+    for (final n in nudges) {
+      final s = n.schedule; // Map<String, dynamic>
+
+      NudgeScheduleSimple schedule;
+      if (s.isNotEmpty && s['kind'] != null) {
+        final kindStr = (s['kind'] as String).toLowerCase();
+        final tpd = (s['timesPerDay'] is num) ? (s['timesPerDay'] as num).toInt() : 1;
+
+        ScheduleKind kind;
+        switch (kindStr) {
+          case 'hourly':         kind = ScheduleKind.hourly; break;
+          case 'specifictimes':
+          case 'specific_times': kind = ScheduleKind.specificTimes; break;
+          case 'continuous':     kind = ScheduleKind.continuous; break;
+          default:               kind = ScheduleKind.timesPerDay;
+        }
+
+        schedule = NudgeScheduleSimple(
+          kind: kind,
+          dailyTarget: kind == ScheduleKind.continuous ? 1 : (tpd <= 0 ? 1 : tpd),
+        );
+      } else if (s.containsKey('timesPerDay')) {
+        schedule = NudgeScheduleSimple(
+          kind: ScheduleKind.timesPerDay,
+          dailyTarget: (s['timesPerDay'] as num).toInt(),
+        );
+      } else {
+        schedule = _defaultScheduleFor(n);
+      }
+
+      scheds[n.id] = schedule;
+    }
+
+    // Mark all cloud nudges as "mine".
+    final myIds = nudges.map((n) => n.id).toSet();
+
+    // Rebuild today's per-nudge counts from DB 'streak' but only if last_done_at is today.
+    final today = DateTime.now();
+    String todayKey(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    final key = todayKey(today);
+    final Map<String, int> todayMap = {};
+
+    for (final n in nudges) {
+      // Pull last_done_at from n.ext if present
+      DateTime? lastDone;
+      final raw = n.ext['last_done_at'];
+      if (raw is String) lastDone = DateTime.tryParse(raw);
+      if (raw is DateTime) lastDone = raw;
+
+      final sameDay = lastDone != null
+          && lastDone.year == today.year
+          && lastDone.month == today.month
+          && lastDone.day == today.day;
+
+      final countForToday = (n.streak ?? 0);
+      if (sameDay && countForToday > 0) {
+        todayMap[n.id] = countForToday;
+      }
+    }
+
+    // Compute completedTodayIds from todayMap vs schedule targets
+    final completed = <String>{};
+    todayMap.forEach((id, cnt) {
+      final target = scheds[id]?.dailyTarget ?? 1;
+      if (cnt >= target) completed.add(id);
+    });
+
+    final dailyLogs = {
+      ...state.dailyLogs,
+      key: todayMap,
+    };
+
+    emit(state.copyWith(
+      allNudges: nudges,
+      schedules: scheds,
+      myNudgeIds: myIds,
+      dailyLogs: dailyLogs,
+      completedTodayIds: completed,
+      isLoading: false,
+      error: null,
+    ));
+  } catch (e) {
+    emit(state.copyWith(isLoading: false, error: e.toString()));
+  }
 }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +302,7 @@ void _addMockGroupAndFriendNudges(
       myNudgeIds: updatedMy,
       schedules: scheds,
     ));
+    _persistNudgeToCloud(id);
   }
 
   /// Remove from "My Nudges" and clean associated state.
@@ -227,6 +336,7 @@ void _addMockGroupAndFriendNudges(
       completionsByDate: history,
       dailyLogs: daily,
     ));
+    _repo.deleteNudge(id);
   }
 
   /// Pause/unpause a nudge in "My Nudges".
@@ -289,6 +399,7 @@ void _addMockGroupAndFriendNudges(
       myNudgeIds: updatedMy,
       schedules: updatedSchedules,
     ));
+    _persistNudgeToCloud(newId);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -332,6 +443,7 @@ void _addMockGroupAndFriendNudges(
       allNudges: updatedAll,
       schedules: updatedSchedules,
     ));
+    _persistNudgeToCloud(newId);
   }
 
   /// Join an existing group nudge
@@ -419,6 +531,7 @@ void _addMockGroupAndFriendNudges(
       allNudges: updatedAll,
       schedules: updatedSchedules,
     ));
+    _persistNudgeToCloud(newId);
   }
 
   /// Accept a friend nudge invitation
@@ -559,6 +672,10 @@ void _addMockGroupAndFriendNudges(
       completedTodayIds: completed,
       completionsByDate: comp,
     ));
+    
+    final todayKey = dateKey(DateTime.now());
+    final newCount = state.dailyLogs[todayKey]?[id] ?? 0;
+    _repo.updateStreakAndLastDone(id: id, newStreak: newCount);
   }
 
   /// Decrement per-day counter (undo last log).
@@ -625,6 +742,7 @@ void _addMockGroupAndFriendNudges(
       schedules: m,
       completedTodayIds: completed,
     ));
+    _repo.updateScheduleJson(nudgeId, _scheduleToJson(schedule));
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -662,7 +780,9 @@ void _addMockGroupAndFriendNudges(
       myNudgeIds: updatedMy,
       schedules: updatedSchedules,
     ));
+    _persistNudgeToCloud(newId);
   }
+
 /// Add a personal nudge to state using an existing id + NudgeSpec.
 /// This makes it appear under "My Nudges" instantly with a default schedule.
 void addPersonalFromSpec(String id, NudgeSpec spec) {
@@ -686,6 +806,7 @@ void addPersonalFromSpec(String id, NudgeSpec spec) {
     myNudgeIds: updatedMy,
     schedules: updatedSchedules,
   ));
+  _persistNudgeToCloud(id);
 }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -721,8 +842,76 @@ void addPersonalFromSpec(String id, NudgeSpec spec) {
     }
     // Default to continuous (won't show on Home Action Hub)
     return const NudgeScheduleSimple(
-      kind: ScheduleKind.continuous,
-      dailyTarget: 1,
-    );
-  }
+     kind: ScheduleKind.continuous,
+     dailyTarget: 1,
+   );
+ }
+
+ String _kindToString(ScheduleKind k) {
+   switch (k) {
+     case ScheduleKind.hourly:
+       return 'hourly';
+     case ScheduleKind.timesPerDay:
+       return 'timesPerDay';
+     case ScheduleKind.specificTimes:
+       return 'specificTimes';
+     case ScheduleKind.continuous:
+       return 'continuous';
+   }
+ }
+
+ Map<String, dynamic> _scheduleToJson(NudgeScheduleSimple s) => {
+   'kind': _kindToString(s.kind),
+   'timesPerDay': s.dailyTarget,
+ };
+
+ Future<void> _persistNudgeToCloud(String id) async {
+   try {
+     final n = state.allNudges.firstWhere((x) => x.id == id);
+     final s = state.schedules[id];
+     await _repo.upsertNudgeWithId(
+       nudge: n,
+       scheduleJson: s != null ? _scheduleToJson(s) : <String, dynamic>{},
+     );
+   } catch (_) {
+     // swallow; UI stays responsive and realtime loader will reconcile later
+   }
+ }
+
+/// Upsert a nudge row using the app's existing id (so local & cloud match).
+/// Pass a small schedule JSON like {'kind':'timesPerDay','timesPerDay': 3}
+Future<void> upsertNudgeWithId({
+ required Nudge nudge,
+ Map<String, dynamic>? scheduleJson,
+}) async {
+ final uid = _c.auth.currentUser?.id;
+ if (uid == null) throw StateError('No authenticated user');
+
+ await _c
+     .from('nudges')
+     .upsert({
+       'id': nudge.id, // keep same id between app and DB
+       'user_id': uid,
+       'title': nudge.title,
+       'description': nudge.description,
+       'category': nudge.category.toLowerCase(),
+       'frequency': nudge.frequency, // your model requires it
+       'is_active': nudge.isActive,
+       'streak': nudge.streak ?? 0,
+       // JSONB columns — safe defaults so inserts never fail
+       'spec': <String, dynamic>{},
+       'schedule': scheduleJson ?? <String, dynamic>{},
+       'stats': <String, dynamic>{},
+       'ext': <String, dynamic>{},
+     }, onConflict: 'id'); // upsert by id
+}
+
+/// Update just the schedule JSON for a nudge
+Future<void> updateScheduleJson(
+ String id,
+ Map<String, dynamic> scheduleJson,
+) async {
+ await _c.from('nudges').update({'schedule': scheduleJson}).eq('id', id);
+}
+ 
 }

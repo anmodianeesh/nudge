@@ -39,6 +39,8 @@ dependencies:
 
   equatable: ^2.0.5
   
+
+
   # Network & Backend
   http: ^1.1.0
   
@@ -47,7 +49,7 @@ dependencies:
 
   
   # Notifications
-  flutter_local_notifications: ^16.3.0
+  flutter_local_notifications: ^19.4.1
   
   # UI
   google_fonts: ^6.1.0
@@ -61,9 +63,10 @@ dependencies:
   drift: ^2.28.1
   drift_sqflite: ^2.0.1
   path: ^1.9.1
-  timezone: ^0.9.4
+  timezone: ^0.10.1
   freezed_annotation: ^3.1.0
   supabase_flutter: ^2.10.0
+  flutter_timezone: ^4.1.1
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../data/repositories/nudge_repository.dart';
 import '../../../data/storage/daily_completion_store.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -328,6 +329,7 @@ class _ActionHubState extends State<_ActionHub> with WidgetsBindingObserver {
 
   // For the quick “completed” animation before we hide
   final Set<String> _justCompletedIds = <String>{};
+  final _repo = NudgeRepository();
 
   @override
   void initState() {
@@ -416,58 +418,60 @@ class _ActionHubState extends State<_ActionHub> with WidgetsBindingObserver {
                 scheduleKind: s.kind,
                 done: done,
                 justCompleted: justCompleted,
-                onLog: () async {
-                  
+              onLog: () async {
+  // 1) Local log via Cubit (keeps your UI logic)
+  final cubit = context.read<NudgesCubit>();
+  cubit.logNow(n.id);
 
-                  // 1) Always log the attempt
-                  final cubit = context.read<NudgesCubit>();
-                  cubit.logNow(n.id);
+  // 2) Compute the new count (you already have `count` & `target` above)
+  final newCount = count + 1;
 
-                  // 2) Did this reach the target?
-                  final newCount = count + 1;
-                  if (newCount >= target && !done) {
-                    setState(() => _justCompletedIds.add(n.id));
+  // 3) Persist to Supabase (streak + last_done_at)
+  try {
+    await _repo.updateStreakAndLastDone(id: n.id, newStreak: newCount);
+  } catch (_) {
+    // ignore; your realtime + cloud loader will reconcile
+  }
 
-                    // Congrats toast (NO undo)
-                    ScaffoldMessenger.of(context)
-                      ..hideCurrentSnackBar()
-                      ..showSnackBar(
-                        SnackBar(
-                          content: Text('🎉 Great job on “${n.title}”!'),
-                          backgroundColor: AppTheme.primaryPurple,
-                          duration: const Duration(seconds: 2),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      );
+  // 4) Your existing celebration + hide logic (unchanged)
+  final done = count >= target;
+  if (newCount >= target && !done) {
+    setState(() => _justCompletedIds.add(n.id));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('🎉 Great job on "${n.title}"!'),
+          backgroundColor: AppTheme.primaryPurple,
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
 
-                    // 3) Briefly show the green check animation, then hide + persist
-                    await Future.delayed(const Duration(milliseconds: 1200));
+    await Future.delayed(const Duration(milliseconds: 1200));
 
-                    // Persist “completed today” and refresh the set
-                    _completedToday = await DailyCompletionStore.markCompleted(n.id);
-                    if (!mounted) return;
+    _completedToday = await DailyCompletionStore.markCompleted(n.id);
+    if (!mounted) return;
+    setState(() => _justCompletedIds.remove(n.id));
 
-                    setState(() {
-                      _justCompletedIds.remove(n.id);
-                    });
-
-                    // Adjust page if needed
-                    if (_controller.hasClients && visibleNudges.length > 1) {
-                      final newIndex = _index >= visibleNudges.length - 1
-                          ? (_index - 1).clamp(0, visibleNudges.length - 2)
-                          : _index;
-                      _controller.animateToPage(
-                        newIndex,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  }
-                },
-              );
+    if (_controller.hasClients && widget.state.actionableNudges.length > 1) {
+      final visibleNudges = widget.state.actionableNudges
+          .where((x) => !_completedToday.contains(x.id))
+          .toList();
+      if (visibleNudges.length > 1) {
+        final newIndex = _index >= visibleNudges.length - 1
+            ? (_index - 1).clamp(0, visibleNudges.length - 2)
+            : _index;
+        _controller.animateToPage(
+          newIndex,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+},);
             },
           ),
         ),

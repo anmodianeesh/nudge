@@ -154,7 +154,7 @@ class SimpleNudgesStorage {
       createdBy: userId,
       status: _statusFor(simpleNudge.status),
       streak: simpleNudge.streak,
-      isAIGenerated: simpleNudge.isAIGenerated,
+      isAIGenerated: simpleNudge.isAIGenerated, frequency: '',
       // If your Nudge model later adds dueDate/schedule, derive it from spec.rrule in a scheduler service.
     );
   }

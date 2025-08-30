@@ -76,7 +76,7 @@ class _PremadeNudgesScreenState extends State<PremadeNudgesScreen> {
       createdBy: 'local',                // or your current user id if you have one
       status: NudgeStatus.active,
       streak: 0,
-      isAIGenerated: false,
+      isAIGenerated: false, frequency: '',
     );
   }
 
